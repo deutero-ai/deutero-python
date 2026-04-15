@@ -1,0 +1,18 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+.env
+node_modules
+yarn-error.log
+.venv
+.vscode
+qodana
+yarn.lock
+augrented-web*
+.idea
+*.json
