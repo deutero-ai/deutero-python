@@ -1,0 +1,1198 @@
+---
+title: "Models and enums"
+description: "Typed Pydantic models returned by every SDK call, and the string enums you can pass as arguments."
+icon: "cubes"
+---
+
+{/* Generated from src/deutero/models.py. */}
+
+Every response is a Pydantic v2 model from `deutero.models`; the commonly used ones are also importable from `deutero` directly. Use `.model_dump()` for a dict, or `.model_dump_json()` for JSON.
+
+``python
+from deutero.models import StudyOut
+
+study: StudyOut = client.studies.get(study_id)
+print(study.status, study.question_count)
+print(study.model_dump(exclude_none=True))
+``
+
+Fields typed `X | None` may be absent from the API response.
+
+## Enums
+
+### StudyType
+Study methodologies accepted as `survey_type`.
+
+| Member | Value |
+|---|---|
+| `StudyType.SOCIOLOGY` | `sociology` |
+| `StudyType.USER_EXPERIENCE` | `user_experience` |
+| `StudyType.CUSTOMER_DEVELOPMENT` | `customer_development` |
+| `StudyType.POLLING` | `polling` |
+
+### ModelTier
+Interview model tiers.
+
+| Member | Value |
+|---|---|
+| `ModelTier.OPEN_WEIGHTS` | `open_weights` |
+| `ModelTier.STANDARD` | `standard` |
+| `ModelTier.PREMIUM` | `premium` |
+
+### NodeType
+Interview flow step types.
+
+| Member | Value |
+|---|---|
+| `NodeType.START` | `start` |
+| `NodeType.END` | `end` |
+| `NodeType.QUESTION` | `question` |
+| `NodeType.DECISION` | `decision` |
+| `NodeType.EXTRACT` | `extract` |
+| `NodeType.CONTEXT_FETCH` | `context_fetch` |
+| `NodeType.WEBHOOK` | `webhook` |
+
+### SearchMode
+Transcript search modes.
+
+| Member | Value |
+|---|---|
+| `SearchMode.STRING` | `string` |
+| `SearchMode.SEMANTIC` | `semantic` |
+| `SearchMode.HYBRID` | `hybrid` |
+
+### AnalysisCategory
+Question categories for `analysis.list_questions()`.
+
+| Member | Value |
+|---|---|
+| `AnalysisCategory.TEXT` | `text` |
+| `AnalysisCategory.SCALE` | `scale` |
+| `AnalysisCategory.OPTIONS` | `options` |
+
+## Projects and studies
+
+### ProjectOut
+Project.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID |  |
+| `name` | str |  |
+| `description` | str \| None |  |
+| `study_count` | int | Number of studies in this project |
+
+### ProjectListOut
+Project list.
+
+| Field | Type | Description |
+|---|---|---|
+| `projects` | list[[ProjectOut](#projectout)] |  |
+
+### StudyOut
+Study.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID |  |
+| `project_id` | UUID \| None |  |
+| `name` | str |  |
+| `description` | str \| None |  |
+| `survey_type` | str \| None |  |
+| `research_question` | str \| None |  |
+| `objectives` | str \| None |  |
+| `target_population` | str \| None |  |
+| `methodology` | str \| None |  |
+| `benefits` | str \| None |  |
+| `risks` | str \| None |  |
+| `support_contact` | str \| None |  |
+| `institution` | str \| None |  |
+| `language` | str \| None |  |
+| `anonymous` | bool |  |
+| `model_tier` | str \| None | Resolved from model_id where possible |
+| `model_id` | str \| None |  |
+| `model_provider` | str \| None |  |
+| `redirect_url` | str \| None |  |
+| `redirect_url_warning` | str \| None | Set only on a create/update that changed or questioned the redirect URL you sent — a single-braced placeholder corrected, or a placeholder we do not substitute. Null on reads |
+| `max_responses` | int \| None |  |
+| `interview_mode` | str |  |
+| `status` | str | Publication status: draft, open, paused or closed. Only an open study admits participants, and an open study's interview configuration is locked (pause to edit, publish to reopen) |
+| `voice_enabled` | bool |  |
+| `video_enabled` | bool |  |
+| `date_created` | str \| None |  |
+| `has_welcome` | bool | A welcome/consent message is configured |
+| `screening_enabled` | bool |  |
+| `screening_question_count` | int |  |
+| `characteristics_enabled` | bool |  |
+| `characteristics_question_count` | int |  |
+| `question_count` | int | Main interview questions configured |
+| `dashboard_url` | str | Researcher dashboard page for this study |
+| `participation_url` | str | Direct text-chat participant link (/chat?survey_id=...) — share this one for text interviews. Append &source=&lt;campaign tag&gt; and/or &participant_id=&lt;your own id for this person&gt; to record where the participant came from |
+| `short_participation_url` | str \| None | Short text-chat participant link, if a short URL slug is set |
+| `voice_participation_url` | str \| None | Direct voice-interview participant link, if voice_enabled |
+| `short_voice_participation_url` | str \| None | Short voice-interview participant link, if voice_enabled and a short URL slug is set |
+| `video_participation_url` | str \| None | Direct video-interview participant link, if video_enabled |
+| `short_video_participation_url` | str \| None | Short video-interview participant link, if video_enabled and a short URL slug is set |
+
+### StudySummary
+Study summary.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID |  |
+| `name` | str |  |
+| `description` | str \| None |  |
+| `survey_type` | str \| None |  |
+| `language` | str \| None |  |
+| `date_created` | str \| None |  |
+| `max_responses` | int \| None |  |
+| `interview_mode` | str |  |
+| `status` | str | Publication status: draft, open, paused or closed. Only an open study admits participants, and an open study's interview configuration is locked (pause to edit, publish to reopen) |
+
+### StudyListOut
+Study list.
+
+| Field | Type | Description |
+|---|---|---|
+| `project_id` | UUID |  |
+| `studies` | list[[StudySummary](#studysummary)] |  |
+
+### StudyStatsOut
+Study stats.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `total_interviews` | int | Interviews started (excluding simulations) |
+| `completed_interviews` | int |  |
+| `incomplete_interviews` | int |  |
+| `completion_rate` | float | Completed / started, as a percentage |
+| `max_responses` | int \| None |  |
+| `quota_fill_rate` | float \| None | Completed / max_responses percentage (null if unlimited) |
+| `quota_remaining` | int \| None |  |
+| `simulated_interviews` | int | Simulated (persona) interviews |
+| `test_interviews` | int | Test runs: a researcher taking the study through a preview link |
+
+### StudyDraft
+AI-drafted study fields, named as `studies.create()` takes them. Nothing is stored.
+
+| Field | Type | Description |
+|---|---|---|
+| `survey_type` | str |  |
+| `language` | str |  |
+| `name` | str | Generated study name |
+| `description` | str \| None |  |
+| `research_question` | str \| None | Research questions, separated by blank lines |
+| `objectives` | str \| None | Research objectives, separated by blank lines |
+| `target_population` | str \| None |  |
+| `methodology` | str \| None |  |
+
+### StudyDraftFromSiteOut
+A study drafted from a product landing page.
+
+| Field | Type | Description |
+|---|---|---|
+| `is_valid` | bool | Whether the page described a product clearly enough to base a study on. When false, draft is null and rationale says what was missing |
+| `rationale` | str | Why this study is worth running, or why no study could be drafted |
+| `draft` | [StudyDraft](#studydraft) \| None | The suggested user_experience study, when is_valid |
+| `generations_used` | int | Drafts generated for this site so far by you, counting this one; limited per site |
+| `generations_limit` | int | Maximum drafts per site |
+
+## Publication and validation
+
+### PublicationStatusOut
+A study's publication status.
+
+| Field | Type | Description |
+|---|---|---|
+| `status` | str | draft, open, paused or closed. Only open admits participants; only draft, paused and closed are editable |
+| `status_changed_at` | str \| None |  |
+| `published_at` | str \| None |  |
+| `plan_tier` | str |  |
+| `open_limit` | int \| None | Studies the plan may have open at once; null is unlimited |
+| `open_count` | int | Studies open now, including this one if open |
+| `credit_check` | [CreditCheckOut](#creditcheckout) |  |
+| `latest_validation` | [LatestValidationOut](#latestvalidationout) \| None |  |
+| `changed_since_publish` | bool |  |
+
+### CreditCheckOut
+Publish-time credit check.
+
+| Field | Type | Description |
+|---|---|---|
+| `per_interview` | float \| None | Worst-case credits for one interview |
+| `modality` | str | The most expensive modality the study allows |
+| `remaining_responses` | int \| None | Null when the study has no response limit |
+| `estimated_total` | float \| None |  |
+| `net_available` | float \| None |  |
+| `can_auto_top_up` | bool |  |
+| `floor_denial` | str \| None | Why even one interview would be refused, or null |
+| `covers_remaining` | bool \| None | Whether the balance covers every remaining response; null when unlimited |
+
+### LatestValidationOut
+The most recent validation run for a study.
+
+| Field | Type | Description |
+|---|---|---|
+| `run_id` | UUID |  |
+| `outcome` | str |  |
+| `issues` | list[[IssueOut](#issueout)] |  |
+| `created_at` | str \| None |  |
+| `current` | bool | True when it validated the current configuration and would be reused by publish |
+
+### ValidationRunOut
+Result of validating a study's full configuration.
+
+| Field | Type | Description |
+|---|---|---|
+| `run_id` | UUID | Pass as acknowledge_validation_run_id to publish despite methodological issues |
+| `outcome` | str | passed, methodological_issues, ethical_issues or blocking_issues |
+| `issues` | list[[IssueOut](#issueout)] |  |
+| `config_hash` | str | Hash of the configuration that was validated |
+| `reused` | bool | True when an earlier verdict for this exact configuration was reused (no new model call) |
+
+### IssueOut
+One issue found by study validation.
+
+| Field | Type | Description |
+|---|---|---|
+| `severity` | str | ethical (must be fixed), blocking (must be fixed) or methodological (may be acknowledged) |
+| `code` | str | Stable identifier, e.g. ethics, no_questions, model_not_on_plan, question_quality |
+| `message` | str |  |
+| `location` | [IssueLocation](#issuelocation) |  |
+
+### IssueLocation
+Where a validation issue was found.
+
+| Field | Type | Description |
+|---|---|---|
+| `kind` | str | question, welcome, screening, characteristics, snowball_message or study |
+| `number` | int \| None | 1-based question number, for questions |
+| `id` | str \| None | The question's id (for a flow: your own step id) |
+
+### PublishOut
+Result of publishing a study.
+
+| Field | Type | Description |
+|---|---|---|
+| `status` | str |  |
+| `validation_run_id` | UUID \| None |  |
+| `already_open` | bool |  |
+
+### PauseOut
+Result of pausing a study.
+
+| Field | Type | Description |
+|---|---|---|
+| `status` | str |  |
+| `in_flight_count` | int | Interviews still running; they finish on the configuration they started with |
+| `in_flight_source` | str | temporal (exact) or database (approximate) |
+
+## Welcome
+
+### WelcomeOut
+Welcome.
+
+| Field | Type | Description |
+|---|---|---|
+| `configured` | bool | Whether a welcome message is set |
+| `message` | str |  |
+| `consent` | bool |  |
+
+### WelcomeDraftOut
+AI-drafted welcome/consent text. Not saved — pass `message` to `welcome.set()`.
+
+| Field | Type | Description |
+|---|---|---|
+| `message` | str | Generated welcome/consent text, written to be read aloud by the interviewer, in the study's language |
+| `consent_level` | str | How much consent language the study's survey_type called for: full_irb (sociology), standard (polling), minimal (user_experience, customer_development) |
+| `placeholders` | list[str] | Placeholders like '[Insert researcher name]' left where the study had no value. Fill each in before saving; participants would otherwise see them verbatim |
+
+### WelcomeTranslationOut
+Welcome translation.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID |  |
+| `source_language` | str |  |
+| `target_language` | str |  |
+| `translation_text` | str |  |
+| `timestamp` | str \| None |  |
+
+### WelcomeTranslationListOut
+Welcome translation list.
+
+| Field | Type | Description |
+|---|---|---|
+| `translations` | list[[WelcomeTranslationOut](#welcometranslationout)] |  |
+
+## Screening and characteristics
+
+### ScreeningOut
+Screening.
+
+| Field | Type | Description |
+|---|---|---|
+| `settings` | [ScreeningSettingsOut](#screeningsettingsout) |  |
+| `questions` | list[[ScreeningQuestionOut](#screeningquestionout)] |  |
+
+### ScreeningSettingsOut
+Screening settings.
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | bool |  |
+| `disqualification_message` | str |  |
+| `redirect_url` | str | URL disqualified participants are sent to; may contain &#123;&#123;external_participant_id&#125;&#125; |
+| `redirect_url_warning` | str \| None | Set only on a write that changed or questioned the redirect URL you sent — a single-braced placeholder corrected, or a placeholder we do not substitute. Null on reads |
+
+### ScreeningQuestionOut
+Screening question.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID |  |
+| `question` | str |  |
+| `options` | list[str] |  |
+| `acceptable_options` | list[str] |  |
+| `question_number` | int |  |
+
+### CharacteristicsOut
+Characteristics.
+
+| Field | Type | Description |
+|---|---|---|
+| `settings` | [CharacteristicsSettingsOut](#characteristicssettingsout) |  |
+| `questions` | list[[CharacteristicQuestionOut](#characteristicquestionout)] |  |
+
+### CharacteristicsSettingsOut
+Characteristics settings.
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | bool |  |
+| `anonymous` | bool |  |
+
+### CharacteristicQuestionOut
+Characteristic question.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID |  |
+| `question` | str |  |
+| `variable` | str |  |
+| `question_type` | str \| None |  |
+| `options` | list[str] |  |
+| `slot_description` | str \| None |  |
+| `question_number` | int |  |
+
+## Questions
+
+### QuestionOut
+Question.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID |  |
+| `question_number` | int |  |
+| `question` | str |  |
+| `type` | str | Effective question type (explicit or inferred) |
+| `explanation` | str \| None |  |
+| `scale` | dict[str, Any] \| None |  |
+| `options` | list[str] \| None |  |
+| `slots` | list[str] \| None |  |
+| `groups` | list[str] \| None |  |
+| `min_select` | int \| None |  |
+| `max_select` | int \| None |  |
+| `follow_up` | bool \| None |  |
+| `min_turns` | int \| None |  |
+| `max_turns` | int \| None |  |
+| `expected_image` | str \| None |  |
+| `images` | list[[QuestionImageOut](#questionimageout)] |  |
+
+### QuestionListOut
+Question list.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `questions` | list[[QuestionOut](#questionout)] |  |
+
+### QuestionImageOut
+Question image.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID |  |
+| `gcs_url` | str |  |
+| `label` | str \| None |  |
+| `position` | int |  |
+
+### ScaleConfig
+Scale config.
+
+| Field | Type | Description |
+|---|---|---|
+| `minScale` | int | Lowest scale value |
+| `maxScale` | int | Highest scale value |
+| `minLabel` | str | Label for the low end |
+| `maxLabel` | str | Label for the high end |
+
+### GeneratedQuestionsOut
+Questions added by AI generation.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `questions` | list[[QuestionOut](#questionout)] | The questions this call added, in interview order |
+| `skipped_image_questions` | int | Image-upload questions the generator proposed but that were not added, because this plan has no vision-capable interview model |
+
+### ValidationOut
+Validation.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `ethics_check` | [EthicsCheck](#ethicscheck) |  |
+| `questions` | list[[QuestionValidation](#questionvalidation)] | One entry per validated question, in interview order |
+
+### EthicsCheck
+Ethics check.
+
+| Field | Type | Description |
+|---|---|---|
+| `passed` | bool | False if any question raises an ethical concern |
+| `issues` | list[str] \| None | Specific concerns; empty when passed |
+
+### QuestionValidation
+Question validation.
+
+| Field | Type | Description |
+|---|---|---|
+| `number` | int | 1-based position in interview order (question 1 is the first) |
+| `question_id` | UUID \| None | The question this finding refers to |
+| `has_issues` | bool | Whether anything was flagged |
+| `language_issues` | [LanguageIssues](#languageissues) \| None |  |
+| `redundancy` | [RedundancyCheck](#redundancycheck) \| None |  |
+| `suggestions` | str \| None | How to improve the question, or null if it is fine |
+
+### LanguageIssues
+Language issues.
+
+| Field | Type | Description |
+|---|---|---|
+| `clarity` | str \| None | Clarity problem, or null if clear |
+| `grammar` | str \| None | Grammar problem, or null if correct |
+| `spelling` | str \| None | Spelling problem, or null if correct |
+
+### RedundancyCheck
+Redundancy check.
+
+| Field | Type | Description |
+|---|---|---|
+| `is_redundant` | bool | Whether this question overlaps another |
+| `overlaps_with` | list[int] \| None | 1-based number values of the questions it overlaps |
+| `description` | str \| None | How they overlap, or null |
+
+## Interview flow
+
+### FlowDocument
+A complete interview flow. `variables`, `entry` and `back_edge` are derived by the compiler — sending them is an error rather than a silent no-op.
+
+| Field | Type | Description |
+|---|---|---|
+| `nodes` | list[[FlowNode](#flownode)] | Every step in the flow. Exactly one `start`, at least one `end`. |
+| `edges` | list[[FlowEdge](#flowedge)] \| None | Connections between start/end/question/decision steps only. extract, webhook and context_fetch steps attach with `after`/`before` instead. |
+
+### FlowNode
+One step in the interview flow.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | str | Your own identifier for this step, unique within the flow (e.g. 'q_pets'). It is preserved everywhere — validation errors and later edits refer to it. Cannot look like 'n12'. |
+| `type` | str | Step type. Call `graph.describe_node_types()` for each type's config fields. One of `start`, `end`, `question`, `decision`, `extract`, `context_fetch`, `webhook`. |
+| `config` | dict[str, Any] \| None | Type-specific configuration. A question needs at least `qtype` and `text`; a decision needs `mode`. See `graph.describe_node_types()`. |
+| `max_revisits` | int \| None | Repeat limit. Required on every step inside a loop: the interview takes the default path out once the step has run this many times. |
+| `after` | str \| None | extract and webhook steps only: the id of the question step this runs immediately after. These steps are never listed in `edges`. |
+| `before` | str \| None | context_fetch steps only: the id of the question step that uses the data it brings in. The fetch runs just before that question. |
+
+### FlowEdge
+A connection from one step to the next.
+
+| Field | Type | Description |
+|---|---|---|
+| `from_` (JSON `from`) | str | Step id the path leaves from. |
+| `to` | str | Step id the path leads to. |
+| `condition` | dict[str, Any] \| None | On a path out of a decision step: a single test, &#123;"var": "has_pets", "op": "eq", "value": "Yes"&#125;. Operators: eq, neq, in, contains, gt, gte, lt, lte, is_set, not_set. Compound logic (all/any/not) is not accepted — chain two decision steps. |
+| `class_` (JSON `class`) | str \| None | On a path out of an llm_classifier decision: the class label this path handles. |
+| `default` | bool | The 'otherwise' path, taken when no condition matches. A decision step with several paths needs exactly one — unless its conditions cover every possible answer of a choices or scale question. |
+| `priority` | int | Evaluation order for paths out of the same decision step; lowest first. |
+
+### PatchOp
+One edit applied to the stored flow.
+
+| Field | Type | Description |
+|---|---|---|
+| `op` | str | Which edit to make. One of `add_node`, `update_node`, `remove_node`, `add_edge`, `update_edge`, `remove_edge`. |
+| `node` | [FlowNode](#flownode) \| None | add_node: the step to add. |
+| `edge` | [FlowEdge](#flowedge) \| None | add_edge: the connection to add. |
+| `id` | str \| None | update_node / remove_node: the step id. |
+| `config` | dict[str, Any] \| None | update_node: config keys to merge into the step. Keys you omit keep their current value; pass null to clear one. |
+| `max_revisits` | int \| None | update_node: new repeat limit. |
+| `after` | str \| None | update_node: re-attach an extract/webhook step. |
+| `before` | str \| None | update_node: re-attach a context_fetch step. |
+| `from_` (JSON `from`) | str \| None | update_edge / remove_edge: the connection's source step. |
+| `to` | str \| None | update_edge / remove_edge: the connection's target step. |
+| `condition` | dict[str, Any] \| None | update_edge: replacement condition. |
+| `class_` (JSON `class`) | str \| None | update_edge: replacement class label. |
+| `default` | bool \| None | update_edge: make this the 'otherwise' path. |
+| `priority` | int \| None | update_edge: new evaluation order. |
+
+### GraphOut
+A study's interview flow and its current state.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `interview_mode` | str | 'graph' if interviews follow this flow, 'linear' if they follow the plain question list. Change it with `graph.activate()`/`graph.deactivate()`. |
+| `graph_version` | int | Increments on every successful save; 0 if no flow exists. |
+| `is_active` | bool | Whether this flow is the study's active interview script. |
+| `has_compiled_ir` | bool | Whether the stored flow last compiled cleanly. Required before activating. |
+| `flow` | [FlowDocument](#flowdocument) \| None | The stored flow, or null if none exists yet. |
+| `errors` | list[[FlowCheckError](#flowcheckerror)] \| None | Problems with the stored flow, if any. |
+
+### GraphCheckOut
+Result of checking or saving a flow.
+
+| Field | Type | Description |
+|---|---|---|
+| `valid` | bool | True when the flow has no problems. |
+| `saved` | bool | Whether the flow was written. Always false for `graph.check()`. |
+| `graph_version` | int | The stored version after this call. |
+| `errors` | list[[FlowCheckError](#flowcheckerror)] \| None | Every problem found. Fix these and check again; nothing is saved while any remain. |
+| `compiled` | dict[str, Any] \| None | The compiled flow when valid: the derived `variables` table and the final execution order with extract/webhook/context_fetch steps spliced in. Use it to confirm attachments landed where you meant. |
+
+### FlowCheckError
+One problem found in a flow.
+
+| Field | Type | Description |
+|---|---|---|
+| `node_id` | str \| None | The step the problem is on, using your own ids. |
+| `code` | str | Stable machine-readable code, e.g. 'no_default', 'unreachable'. |
+| `message` | str | Plain-language explanation of what to fix. |
+
+### GraphModeOut
+Result of activating or deactivating graph mode.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `interview_mode` | str | 'graph' or 'linear'. |
+| `is_active` | bool |  |
+
+### FlowSignalsOut
+Flow signals.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `graph_version` | int | Stored flow version these signals belong to. |
+| `signals` | list[[FlowSignalOut](#flowsignalout)] \| None | One entry per 'Send a signal' step in the saved flow; empty when the flow has none (or the study has no flow at all). |
+
+### FlowSignalOut
+The delivery config behind one 'Send a signal' (webhook) step.
+
+| Field | Type | Description |
+|---|---|---|
+| `step_id` | str | The step's id as you authored it — the same id `graph.set()`, `graph.patch()` and the interview effects log use. |
+| `url` | str \| None | Where this step POSTs. |
+| `method` | str | HTTP method used for the delivery. |
+| `signal_type` | str \| None | Event-type label carried in the signed envelope's `type` field. |
+| `enabled` | bool | False means the interviewer skips this step's delivery. |
+| `signing_secret` | str | Standard Webhooks signing secret (`whsec_…`) this step's deliveries are signed with. Minted when the step is first saved and kept stable across later saves, so it can be read back here — verify every delivery against it before acting on the body. |
+| `updated_at` | str \| None |  |
+
+## Recruitment and embed
+
+### RecruitmentOut
+Recruitment.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `participation_url` | str | Direct text-chat participant link (/chat?survey_id=...) — share this one for text interviews. Append &source=&lt;campaign tag&gt; and/or &participant_id=&lt;your own id for this person&gt; to attribute the arrival; they are stored as web_source and external_participant_id |
+| `short_participation_url` | str \| None | Short text-chat participant link (/chat?s=...); null until a slug is set |
+| `voice_participation_url` | str \| None | Direct voice-interview participant link (/voice?survey_id=...), if voice is enabled for this study |
+| `short_voice_participation_url` | str \| None | Short voice-interview participant link (/voice?s=...), if voice is enabled and a slug is set |
+| `video_participation_url` | str \| None | Direct video-interview participant link (/video?survey_id=...), if video is enabled for this study |
+| `short_video_participation_url` | str \| None | Short video-interview participant link (/video?s=...), if video is enabled and a slug is set |
+| `short_url_slug` | str \| None | Current short URL slug |
+| `max_responses` | int \| None | Response quota (null = unlimited) |
+| `completed_interviews` | int | Completed interviews so far |
+| `quota_remaining` | int \| None | Responses remaining until quota (null if unlimited) |
+| `redirect_url` | str \| None | URL participants are sent to after completing. May contain &#123;&#123;external_participant_id&#125;&#125;, replaced with the id this interview arrived with (empty when it arrived with none) |
+| `redirect_url_warning` | str \| None | Set only on a write that changed or questioned the redirect URL you sent — a single-braced placeholder corrected, or a placeholder we do not substitute. Null on reads, and null when the URL was stored exactly as given |
+| `screening_enabled` | bool |  |
+| `characteristics_enabled` | bool |  |
+
+### EmbedKeyListOut
+Embed key list.
+
+| Field | Type | Description |
+|---|---|---|
+| `keys` | list[dict[str, Any]] |  |
+
+### EmbedSnippetOut
+Embed snippet.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `widget_src` | str | URL of the embed widget script |
+| `snippet` | str | Basic install snippet using a publishable key, with an example data-metadata attribute — page-supplied metadata, which a visitor can edit before the interview starts |
+| `signed_snippet` | str | Install snippet for signed-token mode (your server mints a JWS HS256 token with the key's signing secret). Use this when the interview acts on a metadata value: the token's metadata claim is recorded as verified and overrides any page-supplied value of the same name |
+
+## Personas and simulations
+
+### PersonaOut
+Persona.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID \| None | Null only for an unsaved preview (generate with save=false) |
+| `study_id` | UUID |  |
+| `content` | str | The persona description the simulated participant plays |
+| `preview` | str | First 100 characters of the content |
+| `source` | str | 'manual' = written by a researcher, 'generated' = AI-generated |
+| `created_at` | str \| None |  |
+| `updated_at` | str \| None |  |
+
+### PersonaListOut
+Persona list.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `total` | int |  |
+| `personas` | list[[PersonaOut](#personaout)] |  |
+
+### PersonaGenerateOut
+Persona generate.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `saved` | bool | Whether the personas were persisted |
+| `personas` | list[[PersonaOut](#personaout)] |  |
+
+### SimulationStartOut
+Simulation start.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID | Simulation run id |
+| `study_id` | UUID \| None |  |
+| `interview_id` | UUID \| None | The interview this run produced; read its transcript through the monitoring endpoints |
+| `persona_id` | UUID \| None |  |
+| `status` | str | 'running' while the interview is still being conducted, then 'completed' or 'failed'. A run that is still unsettled two hours after it started reports 'failed': its worker is gone and its credit reservation has expired, so it can no longer complete. |
+| `model_id` | str \| None |  |
+| `model_provider` | str \| None |  |
+| `deliver_signals` | bool | Whether this run's signals were sent for real |
+| `credits_used` | float \| None | Charged once the run settles; null while it is running |
+| `error` | str \| None | Why the run failed, when it did — the refusal that stopped it, the error that ended it, or a note that nothing ever settled it. Null for a run that is still going or that completed. |
+| `started_at` | str \| None |  |
+| `estimated_credits` | float | Credits reserved for this run; the reservation is released if the run does not complete |
+
+### SimulationOut
+Simulation.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID | Simulation run id |
+| `study_id` | UUID \| None |  |
+| `interview_id` | UUID \| None | The interview this run produced; read its transcript through the monitoring endpoints |
+| `persona_id` | UUID \| None |  |
+| `status` | str | 'running' while the interview is still being conducted, then 'completed' or 'failed'. A run that is still unsettled two hours after it started reports 'failed': its worker is gone and its credit reservation has expired, so it can no longer complete. |
+| `model_id` | str \| None |  |
+| `model_provider` | str \| None |  |
+| `deliver_signals` | bool | Whether this run's signals were sent for real |
+| `credits_used` | float \| None | Charged once the run settles; null while it is running |
+| `error` | str \| None | Why the run failed, when it did — the refusal that stopped it, the error that ended it, or a note that nothing ever settled it. Null for a run that is still going or that completed. |
+| `started_at` | str \| None |  |
+
+### SimulationListOut
+Simulation list.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `total` | int |  |
+| `simulations` | list[[SimulationOut](#simulationout)] |  |
+
+## Interviews and transcripts
+
+### InterviewListOut
+Interview list.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `total` | int | Total interviews matching the filters |
+| `limit` | int |  |
+| `offset` | int |  |
+| `interviews` | list[[InterviewSummary](#interviewsummary)] |  |
+
+### InterviewSummary
+Interview summary.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID |  |
+| `participant_id` | UUID \| None |  |
+| `participant_name` | str \| None |  |
+| `start_time` | str \| None |  |
+| `end_time` | str \| None |  |
+| `completed` | bool \| None |  |
+| `simulated` | bool |  |
+| `test_run` | bool | A researcher's own test through the dashboard's Try Interview / Preview, not a participant. Never counts toward max_responses; nothing is owed for it |
+| `termination_reason` | str \| None |  |
+| `web_source` | str \| None | Campaign tag the entry link carried (?source=…); null when the link named none |
+| `external_participant_id` | str \| None | Your own id for this participant, from the link's ?participant_id= or the embed metadata bag's participant_id key. Free text from another system — not the participant_id UUID above, and not an authenticated identity: anyone holding the link can set it |
+| `referrer` | str \| None | HTTP Referer of the participant's first page load; null when the browser sent none (a typed URL, a QR code, an https→http hop) |
+
+### InterviewDetailOut
+Interview detail.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID |  |
+| `study_id` | UUID \| None |  |
+| `participant_id` | UUID \| None |  |
+| `participant_name` | str \| None |  |
+| `start_time` | str \| None |  |
+| `end_time` | str \| None |  |
+| `completed` | bool \| None |  |
+| `simulated` | bool |  |
+| `test_run` | bool | A researcher's own test through the dashboard's Try Interview / Preview, not a participant. Never counts toward max_responses; nothing is owed for it |
+| `termination_reason` | str \| None |  |
+| `web_source` | str \| None | Campaign tag the entry link carried (?source=…); null when the link named none |
+| `external_participant_id` | str \| None | Your own id for this participant, from the link's ?participant_id= or the embed metadata bag's participant_id key. Free text from another system — not the participant_id UUID above, and not an authenticated identity: anyone holding the link can set it |
+| `referrer` | str \| None | HTTP Referer of the participant's first page load; null when the browser sent none (a typed URL, a QR code, an https→http hop) |
+| `message_count` | int |  |
+| `qualifications` | list[[QualificationOut](#qualificationout)] |  |
+| `characteristics` | list[[CharacteristicValueOut](#characteristicvalueout)] |  |
+| `embed_metadata` | list[[EmbedMetadataItem](#embedmetadataitem)] |  |
+| `variables` | list[[CapturedVariableOut](#capturedvariableout)] | Answers this interview captured into flow variables — the structured values branching, piped text and downstream steps ran on. Empty for a study that captures nothing, including every linear study |
+
+### InterviewDetailListOut
+Full detail for every interview matching a lookup, newest first.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `external_participant_id` | str | The id that was looked up |
+| `total` | int | Interviews this id has. More than one is normal — a person can start again after abandoning, and each attempt is its own interview; the first row is the newest |
+| `interviews` | list[[InterviewDetailOut](#interviewdetailout)] |  |
+
+### QualificationOut
+Qualification.
+
+| Field | Type | Description |
+|---|---|---|
+| `question` | str \| None |  |
+| `answer` | str \| None |  |
+| `is_qualified` | bool \| None |  |
+
+### CharacteristicValueOut
+Characteristic value.
+
+| Field | Type | Description |
+|---|---|---|
+| `variable` | str \| None |  |
+| `value` | str \| None |  |
+
+### EmbedMetadataItem
+Embed metadata item.
+
+| Field | Type | Description |
+|---|---|---|
+| `key` | str |  |
+| `value` | Union[str, bool, int, float] \| None | Scalar metadata value (string, number, boolean, or null) |
+| `provenance` | str | 'token' = verified by the customer server, 'client' = page-supplied (untrusted) |
+
+### CapturedVariableOut
+One captured answer (Interview Flow variable) an interview ended up holding.
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | str | Variable name, as declared in the flow |
+| `value` | Any \| None | The captured value: a string, number, boolean, list or object depending on what the capturing step produces |
+| `value_type` | str \| None | Shape of value: 'string', 'number', 'boolean', 'list[string]' or 'object' |
+| `source` | str \| None | Kind of step that captured it: 'question' (a question's structured answer), 'extract' (a 'Capture from response' step), 'fetch' (a 'Bring in data' response) or 'metadata' (embed-widget metadata) |
+| `node_id` | str \| None | Flow step that last wrote the value (graph studies) |
+| `node_visit` | int | Which visit to that step wrote it (1 = first). Above 1 means the step ran again in a loop and the value may be a merged accumulation |
+| `question_id` | UUID \| None | Question that captured it, for a linear (non-graph) study |
+| `producer` | str \| None | Human-readable capturing step: the question's text when a question captured it, otherwise the flow step id |
+| `updated_at` | str \| None | When the value was last written |
+
+### TranscriptOut
+Transcript.
+
+| Field | Type | Description |
+|---|---|---|
+| `interview_id` | UUID |  |
+| `study_id` | UUID \| None |  |
+| `participant_id` | UUID \| None |  |
+| `completed` | bool \| None |  |
+| `external_participant_id` | str \| None | Your own id for this participant, from the entry link's ?participant_id= or the embed metadata bag's participant_id key — the id to join this record back to your own records by. Null when the interview arrived without one |
+| `web_source` | str \| None | Campaign tag the entry link carried (?source=…); null when the link named none |
+| `test_run` | bool | A researcher's own test through the dashboard's Try Interview / Preview, not a participant. Never counts toward max_responses; nothing is owed for it |
+| `messages` | list[[TranscriptMessage](#transcriptmessage)] |  |
+| `variables` | list[[CapturedVariableOut](#capturedvariableout)] | Answers this interview captured into flow variables — the structured values branching, piped text and downstream steps ran on. Empty for a study that captures nothing, including every linear study |
+| `decisions` | list[[DecisionOutcomeOut](#decisionoutcomeout)] | Every Branch this interview passed through, in order, with the label chosen and the step it routed to. Empty for a linear study or a flow with no branching |
+
+### TranscriptMessage
+Transcript message.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID |  |
+| `type` | str |  |
+| `content` | str |  |
+| `question_number` | int \| None |  |
+| `node_id` | str \| None |  |
+| `timestamp` | str \| None |  |
+
+### DecisionOutcomeOut
+One decision traversal: which way a Branch went, and why.
+
+| Field | Type | Description |
+|---|---|---|
+| `node_id` | str | Graph step id of the Branch |
+| `node_visit` | int | Which visit to that step this was (1 = first), so a looped branch has one entry per pass |
+| `mode` | str | 'llm_classifier' for a Smart Branch, 'deterministic' for a condition Branch |
+| `classes` | list[str] | Labels the classifier was offered, in the order given |
+| `raw_label` | str \| None | What the classifier emitted. Empty when the call failed or returned a label outside the offered set — either way the traversal took the default path |
+| `matched_class` | str \| None | The label that matched an outgoing path; null when nothing matched and the default was taken |
+| `chosen_node_id` | str \| None | The step this traversal routed to |
+| `used_default` | bool | Whether the 'otherwise' path was taken. True for every traversal whose label matched no path — worth checking when a branch looks like it fired the wrong way |
+| `error` | str \| None | Set when the classifier call itself failed |
+| `decided_at` | str \| None |  |
+
+### InterviewEffectsOut
+What an interview's graph steps did outside the conversation.
+
+| Field | Type | Description |
+|---|---|---|
+| `interview_id` | UUID |  |
+| `study_id` | UUID \| None |  |
+| `external_participant_id` | str \| None | Your own id for this participant, from the entry link's ?participant_id= or the embed metadata bag's participant_id key — the id to join this record back to your own records by. Null when the interview arrived without one |
+| `web_source` | str \| None | Campaign tag the entry link carried (?source=…); null when the link named none |
+| `simulated` | bool | Whether this was a simulated (persona) interview |
+| `test_run` | bool | A researcher's own test through the dashboard's Try Interview / Preview, not a participant. Never counts toward max_responses; nothing is owed for it |
+| `fetches` | list[[NodeFetchOut](#nodefetchout)] \| None | 'Bring in data' executions, oldest first |
+| `signals` | list[[SignalDeliveryOut](#signaldeliveryout)] \| None | 'Send a signal' deliveries, oldest first |
+
+### NodeFetchOut
+One execution of a 'Bring in data' (context_fetch) step.
+
+| Field | Type | Description |
+|---|---|---|
+| `node_id` | str | Graph step id that ran the fetch |
+| `node_visit` | int | Which visit to that step this was (1 = first), so a looped step has one entry per pass |
+| `url` | str \| None | URL requested, after piped-text rendering |
+| `method` | str \| None |  |
+| `request_body` | dict[str, Any] \| None | Rendered key/value pairs sent as the JSON body (POST) or query params (GET) |
+| `status_code` | int \| None |  |
+| `data` | Any \| None | Parsed JSON response, in full, on success; null when the fetch errored. A non-JSON body arrives as &#123;'text': ...&#125; |
+| `error` | str \| None | Why the fetch failed (transport error, HTTP &gt;= 400, refused URL); null on success |
+| `ok` | bool | Whether the fetch succeeded |
+| `created_at` | str \| None |  |
+
+### SignalDeliveryOut
+One delivery attempt of a 'Send a signal' (webhook) step.
+
+| Field | Type | Description |
+|---|---|---|
+| `node_id` | str | Graph step id that sent the signal |
+| `node_visit` | int | Which visit to that step this was (1 = first) |
+| `event_type` | str \| None | The signal type, i.e. the envelope's 'type' field |
+| `url` | str \| None | Endpoint configured for this step |
+| `msg_id` | str \| None | Value of the webhook-id header the receiver dedupes on |
+| `request_body` | dict[str, Any] \| None | Rendered body sent as the envelope's 'data' field |
+| `status_code` | int \| None |  |
+| `success` | bool |  |
+| `attempt` | int | Attempts made; a transport failure is retried once, an HTTP error status is not |
+| `dry_run` | bool | True when a simulation built and signed this signal but deliberately did not send it (simulations dry-run signals unless the run opted into real delivery) |
+| `error` | str \| None |  |
+| `created_at` | str \| None |  |
+| `updated_at` | str \| None |  |
+
+### TranscriptsBulkOut
+Transcripts bulk.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `total_interviews` | int | Interviews matching the filters |
+| `limit` | int |  |
+| `offset` | int |  |
+| `transcripts` | list[[InterviewTranscript](#interviewtranscript)] |  |
+
+### InterviewTranscript
+Interview transcript.
+
+| Field | Type | Description |
+|---|---|---|
+| `interview_id` | UUID |  |
+| `participant_id` | UUID \| None |  |
+| `participant_name` | str \| None |  |
+| `external_participant_id` | str \| None | Your own id for this participant, from the entry link's ?participant_id= or the embed metadata bag — what joins this transcript to your own records. Null when the interview arrived without one |
+| `web_source` | str \| None | Campaign tag the entry link carried (?source=…) |
+| `start_time` | str \| None |  |
+| `completed` | bool \| None |  |
+| `simulated` | bool |  |
+| `test_run` | bool | A researcher's own test through the dashboard's Try Interview / Preview, not a participant. Never counts toward max_responses; nothing is owed for it |
+| `messages` | list[[TranscriptMessage](#transcriptmessage)] |  |
+| `variables` | list[[CapturedVariableOut](#capturedvariableout)] | Answers this interview captured into flow variables. Empty for a study that captures nothing, including every linear study |
+
+### SearchOut
+Search.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `query` | str |  |
+| `mode` | str | 'string', 'semantic', or 'hybrid' |
+| `hits` | list[[SearchHit](#searchhit)] |  |
+
+### SearchHit
+Search hit.
+
+| Field | Type | Description |
+|---|---|---|
+| `message_id` | UUID |  |
+| `interview_id` | UUID \| None |  |
+| `participant_id` | UUID \| None |  |
+| `participant_name` | str \| None |  |
+| `external_participant_id` | str \| None | Your own id for the participant whose answer this is, from the entry link or embed metadata; null when the interview arrived without one |
+| `question_id` | UUID \| None |  |
+| `node_id` | str \| None |  |
+| `question_number` | int \| None |  |
+| `content` | str |  |
+| `timestamp` | str \| None |  |
+| `score` | float | Relevance score. Semantic mode: cosine similarity (0-1). String/hybrid modes: reciprocal-rank-fusion score across the full-text and trigram (and, in hybrid, vector) rankings. |
+| `sources` | list[str] | Rankings the hit appeared in: 'fulltext', 'trigram', 'vector' |
+| `test_run` | bool | The answer comes from a researcher's own test through the dashboard's Try Interview / Preview |
+
+## Analysis
+
+### AnalyzableQuestionsOut
+Analyzable questions.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `category` | str | 'text', 'scale', or 'options' |
+| `questions` | list[[AnalyzableQuestion](#analyzablequestion)] |  |
+
+### AnalyzableQuestion
+A question eligible for a given analysis view. id is a questions-table ID for linear studies and a graph step ID for graph-mode studies — the step id as you authored it, exactly as `graph.get()` reports it (pass it back as question_id).
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | str |  |
+| `question` | str |  |
+| `question_number` | int \| None |  |
+| `qtype` | str \| None |  |
+| `scale` | dict[str, Any] \| None | Scale config (scale questions) |
+| `options` | list[str] \| None | Options (options questions) |
+| `response_count` | int \| None | Canonical answer rows (options questions) |
+| `distinct_user_count` | int \| None | Distinct respondents (text questions) |
+
+### ScaleResponsesOut
+Scale responses.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `question_id` | str |  |
+| `counts` | dict[str, int] | Scale value (as string) → number of responses |
+
+### OptionsResponsesOut
+Options responses.
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | UUID |  |
+| `question_id` | str |  |
+| `counts` | list[[OptionCount](#optioncount)] |  |
+
+### OptionCount
+Option count.
+
+| Field | Type | Description |
+|---|---|---|
+| `option` | str |  |
+| `count` | int |  |
+
+### ClusteringOut
+Clustering.
+
+| Field | Type | Description |
+|---|---|---|
+| `exists` | bool |  |
+| `run_id` | UUID \| None |  |
+| `question_id` | str \| None |  |
+| `question_number` | int \| None |  |
+| `n_clusters` | int \| None |  |
+| `timestamp` | str \| None |  |
+| `data_points` | list[[ClusterPoints](#clusterpoints)] |  |
+| `centroids` | list[[Centroid](#centroid)] |  |
+| `thinking` | str \| None | Model reasoning from labeling |
+
+### ClusterPoints
+Cluster points.
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | str | Thematic cluster label |
+| `x` | list[float] |  |
+| `y` | list[float] |  |
+| `text` | list[str] | Message contents in this cluster |
+| `participant_names` | list[str] \| None |  |
+| `analysis` | str \| None | LLM analysis notes |
+
+### Centroid
+Centroid.
+
+| Field | Type | Description |
+|---|---|---|
+| `label` | str |  |
+| `x` | float |  |
+| `y` | float |  |
+
+### OptimalClustersOut
+Optimal clusters.
+
+| Field | Type | Description |
+|---|---|---|
+| `optimal_k` | int |  |
+| `k_values` | list[int] |  |
+| `inertias` | list[float] |  |
+
+## Webhooks
+
+### WebhookOut
+Webhook.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID |  |
+| `label` | str |  |
+| `url` | str |  |
+| `enabled` | bool |  |
+| `events` | list[str] | Subscribed event types; empty means every event |
+| `created_at` | str \| None |  |
+| `updated_at` | str \| None |  |
+
+### WebhookListOut
+Webhook list.
+
+| Field | Type | Description |
+|---|---|---|
+| `webhooks` | list[[WebhookOut](#webhookout)] |  |
+| `total` | int |  |
+| `event_types` | list[str] | Every subscribable event type, for convenience |
+
+### WebhookCreatedOut
+A newly created endpoint, plus the one and only sight of its secret.
+
+| Field | Type | Description |
+|---|---|---|
+| `webhook` | [WebhookOut](#webhookout) |  |
+| `signing_secret` | str | Standard Webhooks signing secret (whsec_…). **Shown once and never retrievable** — store it now, or call rotate_webhook_secret later for a new one. Verify every delivery against it before acting on the body |
+
+### WebhookSecretOut
+Webhook secret.
+
+| Field | Type | Description |
+|---|---|---|
+| `webhook` | [WebhookOut](#webhookout) |  |
+| `signing_secret` | str | The new signing secret. The previous one stops verifying immediately, so deploy this before the next delivery |
+
+### WebhookDeleteOut
+Webhook delete.
+
+| Field | Type | Description |
+|---|---|---|
+| `deleted` | bool |  |
+| `webhook_id` | UUID |  |
+
+### WebhookEventTypeOut
+One subscribable event, with what it carries.
+
+| Field | Type | Description |
+|---|---|---|
+| `event_type` | str |  |
+| `description` | str | When this event fires |
+| `data_fields` | list[str] | Keys present in the envelope's data object |
+
+### WebhookEventTypeListOut
+Webhook event type list.
+
+| Field | Type | Description |
+|---|---|---|
+| `event_types` | list[[WebhookEventTypeOut](#webhookeventtypeout)] |  |
+| `envelope` | str | Shape of every delivery body, whatever the event type |
+| `signature_headers` | list[str] | Headers carrying the Standard Webhooks signature |
+
+### WebhookDeliveryOut
+Webhook delivery.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID |  |
+| `event_type` | str |  |
+| `msg_id` | str | Value of the webhook-id header the receiver dedupes on |
+| `status_code` | int \| None |  |
+| `success` | bool |  |
+| `error_message` | str \| None |  |
+| `external_participant_id` | str \| None | Your own id for the participant this delivery was about, as it was sent in the event payload. Present on interview.started and interview.completed deliveries whose entry link carried one; null for every event that names no participant. Use it to reconcile what you were told against what you acted on — filter this endpoint by external_participant_id to find the deliveries for one person, or list the failures and read this field to see who was never successfully notified. |
+| `created_at` | str \| None |  |
+
+### WebhookDeliveryListOut
+Webhook delivery list.
+
+| Field | Type | Description |
+|---|---|---|
+| `webhook_id` | UUID |  |
+| `total` | int | Deliveries logged for this endpoint |
+| `limit` | int |  |
+| `offset` | int |  |
+| `deliveries` | list[[WebhookDeliveryOut](#webhookdeliveryout)] | Newest first |
+
+## Credits and misc
+
+### CreditBalanceOut
+Credit balance.
+
+| Field | Type | Description |
+|---|---|---|
+| `available_credits` | float |  |
+| `credits_used` | float |  |
+| `credits_reserved` | float |  |
+| `base_limit` | float |  |
+| `purchased_credits` | float |  |
+| `rollover_credits` | float |  |
+| `is_trial_active` | bool |  |
+| `trial_credits_used` | float |  |
+| `net_available` | float |  |
+
+### SuccessResponse
+Generic acknowledgement for mutations that return no resource body.
+
+| Field | Type | Description |
+|---|---|---|
+| `success` | bool |  |
+| `message` | str | Human-readable status message |

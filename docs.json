@@ -1,0 +1,108 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Deutero Python SDK",
+  "description": "Official Python SDK for the Deutero Study Management API: design AI-moderated interview studies, recruit participants, rehearse with AI personas and analyze responses.",
+  "colors": {
+    "primary": "#4F46E5",
+    "light": "#818CF8",
+    "dark": "#4338CA"
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Get started",
+            "pages": [
+              "index",
+              "get-started/quickstart",
+              "get-started/authentication",
+              "get-started/async",
+              "get-started/configuration"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/study-lifecycle",
+              "guides/interview-flows",
+              "guides/recruitment-and-embedding",
+              "guides/simulations",
+              "guides/analyzing-responses",
+              "guides/receiving-webhooks",
+              "guides/error-handling"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": ["changelog"]
+          }
+        ]
+      },
+      {
+        "tab": "SDK reference",
+        "groups": [
+          {
+            "group": "Client",
+            "pages": ["reference/client"]
+          },
+          {
+            "group": "Study setup",
+            "pages": [
+              "reference/projects",
+              "reference/studies",
+              "reference/welcome",
+              "reference/screening",
+              "reference/characteristics",
+              "reference/questions",
+              "reference/graph"
+            ]
+          },
+          {
+            "group": "Recruitment",
+            "pages": ["reference/recruitment", "reference/embed"]
+          },
+          {
+            "group": "Simulation",
+            "pages": ["reference/personas", "reference/simulations"]
+          },
+          {
+            "group": "Results",
+            "pages": ["reference/interviews", "reference/transcripts", "reference/analysis"]
+          },
+          {
+            "group": "Organization",
+            "pages": ["reference/webhooks", "reference/credits"]
+          },
+          {
+            "group": "Utilities",
+            "pages": ["reference/webhook-verification", "reference/models", "reference/exceptions"]
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Dashboard",
+        "href": "https://dashboard.deutero.ai"
+      }
+    ],
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/deutero-ai/deutero-python"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/deutero-ai/deutero-python",
+      "website": "https://deutero.ai"
+    }
+  },
+  "contextual": {
+    "options": ["copy", "view", "chatgpt", "claude"]
+  }
+}

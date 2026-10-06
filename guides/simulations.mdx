@@ -1,0 +1,110 @@
+---
+title: "Simulations"
+description: "Rehearse a study with AI personas before recruiting real participants."
+icon: "robot"
+---
+
+A simulation runs your real interview (welcome, screening, questions or flow) with an AI playing the participant. Use simulations to read transcripts, test branches and catch confusing questions before anyone real takes part.
+
+Simulated interviews are kept separate from real ones: lists, transcripts and search leave them out unless you ask for them.
+
+## Personas
+
+A persona is a third-person brief describing who the simulated participant is, as if you were briefing an actor.
+
+<CodeGroup>
+
+```python Generate
+result = client.personas.generate(study.id, count=3)  # 1-10, saved by default
+for p in result.personas:
+    print(p.id, p.preview)
+```
+
+```python Preview without saving
+result = client.personas.generate(study.id, count=3, save=False)
+# previewed personas have no IDs
+```
+
+```python Write by hand
+persona = client.personas.create(
+    study.id,
+    content=(
+        "Maya is a 41-year-old operations lead at a 120-person logistics firm. "
+        "She signed up on a colleague's recommendation, is short on time and "
+        "sceptical of new tools after a failed rollout last year."
+    ),
+)
+```
+
+</CodeGroup>
+
+Editing a persona with [`personas.update`](/reference/personas#update) only affects future runs. Deleting one keeps the interviews it already produced.
+
+## Run a simulation
+
+`run` returns immediately. The interview continues in the background.
+
+```python
+run = client.simulations.run(study.id, persona_id=persona.id, model_tier="standard")
+print(run.id, run.status, run.estimated_credits)
+```
+
+Pass `persona=` with ad-hoc text instead of `persona_id` for a one-off, or omit both for a generic participant.
+
+Credits are reserved up front. A run that would exceed your balance raises `InsufficientCreditsError`, and a `model_tier` your plan doesn't include raises `PermissionDeniedError`.
+
+## Wait for it to finish
+
+Poll until `status` is `completed` or `failed`:
+
+```python
+import time
+
+while (sim := client.simulations.get(run.id)).status == "running":
+    time.sleep(10)
+
+if sim.status == "failed":
+    print("Failed:", sim.error)
+else:
+    print("Used", sim.credits_used, "credits")
+    transcript = client.interviews.get_transcript(sim.interview_id)
+    for message in transcript.messages:
+        print(f"[{message.type}] {message.content}")
+```
+
+Rather than polling, you can subscribe to the [`simulation.completed`](/guides/receiving-webhooks#event-types) webhook.
+
+## Run several at once
+
+Kick off one run per persona, then wait for all of them:
+
+```python
+runs = [client.simulations.run(study.id, persona_id=p.id) for p in client.personas.list(study.id).personas]
+
+pending = {r.id for r in runs}
+while pending:
+    time.sleep(10)
+    for sim_id in list(pending):
+        if client.simulations.get(sim_id).status != "running":
+            pending.discard(sim_id)
+```
+
+Or list them with a status filter:
+
+```python
+failed = client.simulations.list(study.id, status="failed")
+```
+
+## Signals during simulations
+
+If your [interview flow](/guides/interview-flows#signals) has "Send a signal" steps, simulations don't deliver them to the real endpoints by default. Pass `deliver_signals=True` to send them. They arrive with `event.simulated == True`, so your receiver can tell them apart.
+
+## Including simulations in results
+
+```python
+client.interviews.list(study.id, simulated=True)                 # only simulated
+client.transcripts.list(study.id, include_simulated=True)        # real and simulated
+client.transcripts.search(study.id, q="pricing", include_simulated=True)
+```
+
+Deleting a simulation record with [`simulations.delete`](/reference/simulations#delete) keeps the interview it produced.

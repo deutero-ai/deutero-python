@@ -1,0 +1,103 @@
+---
+title: "Deutero and AsyncDeutero"
+sidebarTitle: "Client"
+description: "The client classes, their constructor options and the resources they expose."
+icon: "plug"
+---
+
+```python
+from deutero import AsyncDeutero, Deutero
+
+client = Deutero()
+async_client = AsyncDeutero()
+```
+
+`Deutero` is synchronous and `AsyncDeutero` is its asyncio counterpart. They expose the same resources, and every method takes the same arguments; on `AsyncDeutero` each method is a coroutine.
+
+## Constructor
+
+```python
+Deutero(
+    *,
+    api_key: str | None = None,
+    base_url: str | None = None,
+    timeout: float | None = None,
+    http_client: httpx.Client | None = None,
+)
+```
+
+<ParamField body="api_key" type="str">
+  Your Deutero API key. Falls back to the `DEUTERO_API_KEY` environment variable. Raises `ValueError` if neither is set.
+</ParamField>
+
+<ParamField body="base_url" type="str" default="https://dashboard.deutero.ai/study-api">
+  Override the API root.
+</ParamField>
+
+<ParamField body="timeout" type="float" default="120">
+  Request timeout in seconds. Not applied to a client you pass as `http_client`.
+</ParamField>
+
+<ParamField body="http_client" type="httpx.Client">
+  A preconfigured client. `AsyncDeutero` takes an `httpx.AsyncClient`. The SDK adds the API key header and, if the client has no `base_url`, its own.
+</ParamField>
+
+See [Configuration](/get-started/configuration) for examples.
+
+## Resources
+
+| Attribute | Purpose |
+|---|---|
+| [`projects`](/reference/projects) | Group studies into projects |
+| [`studies`](/reference/studies) | Create, draft, validate, publish and pause studies |
+| [`welcome`](/reference/welcome) | Welcome and consent message, and its translations |
+| [`screening`](/reference/screening) | Qualifying questions that gate participation |
+| [`characteristics`](/reference/characteristics) | Participant attributes for segmentation |
+| [`questions`](/reference/questions) | The linear interview question list |
+| [`graph`](/reference/graph) | Branching interview flows |
+| [`recruitment`](/reference/recruitment) | Participation links, quotas and redirects |
+| [`embed`](/reference/embed) | Publishable keys and widget snippets |
+| [`personas`](/reference/personas) | AI participant personas |
+| [`simulations`](/reference/simulations) | Simulated interview runs |
+| [`interviews`](/reference/interviews) | Interview records, transcripts and flow effects |
+| [`transcripts`](/reference/transcripts) | Bulk transcript export and search |
+| [`analysis`](/reference/analysis) | Response tallies and thematic clustering |
+| [`webhooks`](/reference/webhooks) | Organization webhook endpoints |
+| [`credits`](/reference/credits) | Credit balance |
+
+## Methods
+
+### health()
+
+```python
+client.health() -> dict[str, Any]
+```
+
+Liveness check (`GET /health`). Doesn't require a valid API key. Returns the raw JSON body.
+
+### close()
+
+```python
+client.close() -> None
+```
+
+Closes the underlying connection pool. On `AsyncDeutero`, `await client.close()`. A client you passed as `http_client` is left open.
+
+### Context manager
+
+```python
+with Deutero() as client:
+    ...
+
+async with AsyncDeutero() as client:
+    ...
+```
+
+The pool is closed on exit.
+
+## Conventions
+
+- IDs accept `str` or `uuid.UUID`.
+- Keyword arguments left as `None` aren't sent, so the server default applies, and on updates the field is unchanged.
+- Enum arguments accept the enum member or its string value.
+- Responses are [Pydantic models](/reference/models). Errors raise [exceptions](/reference/exceptions).

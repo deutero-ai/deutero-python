@@ -1,0 +1,120 @@
+---
+title: "client.characteristics"
+sidebarTitle: "Characteristics"
+description: "Participant attributes collected before the interview, for segmenting results."
+icon: "id-card"
+---
+
+Characteristics are collected before the interview and stored on each interview under the question's `variable` name. They have the same shape of API as [screening](/reference/screening).
+
+```python
+client.characteristics.create_question(
+    study.id,
+    question="What is your role?",
+    variable="role",
+    options=["Engineer", "PM", "Designer"],
+)
+client.characteristics.create_question(
+    study.id,
+    question="How many people work at your company?",
+    variable="company_size",
+    question_type="slot",
+    slot_description="Approximate headcount as a number",
+)
+client.characteristics.set_settings(study.id, enabled=True)
+```
+
+Read them back on [`interviews.get()`](/reference/interviews#get) as `characteristics`.
+
+## get()
+
+```python
+client.characteristics.get(study_id) -> CharacteristicsOut
+```
+
+Settings plus the ordered question list.
+
+**Returns** [`CharacteristicsOut`](/reference/models#characteristicsout).
+
+## set_settings()
+
+```python
+client.characteristics.set_settings(study_id, *, enabled: bool, anonymous: bool | None = None) -> CharacteristicsSettingsOut
+```
+
+Enable or disable characteristic collection. Disabling keeps the question list.
+
+<ParamField body="enabled" type="bool" required>
+  Whether characteristics are collected before the interview.
+</ParamField>
+
+<ParamField body="anonymous" type="bool">
+  Skip collecting participants' first names.
+</ParamField>
+
+**Returns** [`CharacteristicsSettingsOut`](/reference/models#characteristicssettingsout).
+
+## create_question()
+
+```python
+client.characteristics.create_question(
+    study_id,
+    *,
+    question: str,
+    variable: str,
+    question_type: str | None = None,
+    options: list[str] | None = None,
+    slot_description: str | None = None,
+) -> CharacteristicQuestionOut
+```
+
+<ParamField body="question" type="str" required>
+  Question text.
+</ParamField>
+
+<ParamField body="variable" type="str" required>
+  Variable name the answer is stored under.
+</ParamField>
+
+<ParamField body="question_type" type="str" default="multiple">
+  `multiple` (choose from `options`) or `slot` (a free-form value described by `slot_description`).
+</ParamField>
+
+<ParamField body="options" type="list[str]">
+  Answer options, for multiple-choice questions.
+</ParamField>
+
+<ParamField body="slot_description" type="str">
+  The value to elicit, for slot questions.
+</ParamField>
+
+**Returns** [`CharacteristicQuestionOut`](/reference/models#characteristicquestionout).
+
+## update_question()
+
+```python
+client.characteristics.update_question(study_id, question_id, *, question=None, variable=None,
+                                       question_type=None, options=None, slot_description=None)
+```
+
+Update a characteristic question. Only the arguments you pass change.
+
+**Returns** [`CharacteristicQuestionOut`](/reference/models#characteristicquestionout).
+
+## delete_question()
+
+```python
+client.characteristics.delete_question(study_id, question_id) -> SuccessResponse
+```
+
+**Returns** [`SuccessResponse`](/reference/models#successresponse).
+
+## reorder_questions()
+
+```python
+client.characteristics.reorder_questions(study_id, *, question_ids: Sequence[str | UUID]) -> CharacteristicsOut
+```
+
+Pass every characteristic question ID, in the order you want.
+
+**Returns** [`CharacteristicsOut`](/reference/models#characteristicsout).

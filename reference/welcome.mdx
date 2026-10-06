@@ -1,0 +1,96 @@
+---
+title: "client.welcome"
+sidebarTitle: "Welcome"
+description: "The welcome and consent message participants see first, and its translations."
+icon: "hand-wave"
+---
+
+## get()
+
+```python
+client.welcome.get(study_id) -> WelcomeOut
+```
+
+Get the welcome message. `configured` is false if none has been set.
+
+**Returns** [`WelcomeOut`](/reference/models#welcomeout).
+
+## set()
+
+```python
+client.welcome.set(study_id, *, message: str, consent: bool | None = None) -> WelcomeOut
+```
+
+Create or replace the welcome and consent message.
+
+<ParamField path="study_id" type="str | UUID" required>
+  The study.
+</ParamField>
+
+<ParamField body="message" type="str" required>
+  Shown before the interview starts.
+</ParamField>
+
+<ParamField body="consent" type="bool">
+  Require participants to agree explicitly before the interview begins.
+</ParamField>
+
+**Returns** [`WelcomeOut`](/reference/models#welcomeout).
+
+## generate()
+
+```python
+client.welcome.generate(study_id) -> WelcomeDraftOut
+```
+
+Draft the welcome and consent message with AI. **Nothing is saved.** The draft draws on the study's name, description, research question, target population, benefits, risks, support contact, question count, survey type and language, and on your profile. Anything missing becomes a placeholder such as `[Insert researcher name]` and is listed in `placeholders`. Usually takes 10–30 seconds.
+
+```python
+draft = client.welcome.generate(study.id)
+message = draft.message
+for placeholder in draft.placeholders:
+    message = message.replace(placeholder, lookup(placeholder))
+client.welcome.set(study.id, message=message, consent=True)
+```
+
+**Returns** [`WelcomeDraftOut`](/reference/models#welcomedraftout).
+
+## list_translations()
+
+```python
+client.welcome.list_translations(study_id) -> WelcomeTranslationListOut
+```
+
+**Returns** [`WelcomeTranslationListOut`](/reference/models#welcometranslationlistout).
+
+## upsert_translation()
+
+```python
+client.welcome.upsert_translation(
+    study_id, *, target_language: str, translation_text: str, source_language: str | None = None
+) -> WelcomeTranslationOut
+```
+
+Add or replace the translation for `target_language`. Set the welcome message first.
+
+<ParamField body="target_language" type="str" required>
+  Language name or ISO code, such as `"Spanish"` or `"es"`.
+</ParamField>
+
+<ParamField body="translation_text" type="str" required>
+  The translated welcome message.
+</ParamField>
+
+<ParamField body="source_language" type="str" default="English">
+  Source language name or ISO code.
+</ParamField>
+
+**Returns** [`WelcomeTranslationOut`](/reference/models#welcometranslationout).
+
+## delete_translation()
+
+```python
+client.welcome.delete_translation(study_id, translation_id) -> SuccessResponse
+```
+
+**Returns** [`SuccessResponse`](/reference/models#successresponse).

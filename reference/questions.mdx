@@ -1,0 +1,198 @@
+---
+title: "client.questions"
+sidebarTitle: "Questions"
+description: "The linear interview question list: create, generate, edit, reorder and validate."
+icon: "list-ol"
+---
+
+In linear mode, the interviewer asks these questions in order, probing with follow-ups. For branching interviews, see [`client.graph`](/reference/graph).
+
+## list()
+
+```python
+client.questions.list(study_id) -> QuestionListOut
+```
+
+The study's questions, in interview order.
+
+**Returns** [`QuestionListOut`](/reference/models#questionlistout).
+
+## create()
+
+```python
+client.questions.create(study_id, *, question: str, qtype: str | None = None, **config) -> QuestionOut
+```
+
+Create a question and append it to the end of the list.
+
+<ParamField path="study_id" type="str | UUID" required>
+  The study.
+</ParamField>
+
+<ParamField body="question" type="str" required>
+  Question text.
+</ParamField>
+
+<ParamField body="qtype" type="str">
+  `text`, `scale`, `choices`, `multi_select`, `ranking`, `slots`, `card_sort` or `image_upload`. If omitted, it's inferred: `scale` → `scale`, `options` → `choices`, `slots` → `slots`, `expected_image` → `image_upload`, otherwise `text`. `image_upload` needs the `standard` or `premium` model tier.
+</ParamField>
+
+<ParamField body="explanation" type="str">
+  Guidance for the interviewer on how to probe this question.
+</ParamField>
+
+<ParamField body="scale" type="ScaleConfig | dict">
+  For scale questions, for example `{"minScale": 1, "maxScale": 5, "minLabel": "Not at all", "maxLabel": "Very"}`.
+</ParamField>
+
+<ParamField body="options" type="list[str]">
+  Answer options, for `choices`, `multi_select` and `ranking`.
+</ParamField>
+
+<ParamField body="slots" type="list[str]">
+  Named slots to fill, for `slots` questions.
+</ParamField>
+
+<ParamField body="groups" type="list[str]">
+  Bucket names, for `card_sort` questions.
+</ParamField>
+
+<ParamField body="min_select" type="int">
+  Minimum selections, for `multi_select`.
+</ParamField>
+
+<ParamField body="max_select" type="int">
+  Maximum selections, for `multi_select`.
+</ParamField>
+
+<ParamField body="follow_up" type="bool" default="True">
+  Whether the interviewer asks follow-up questions.
+</ParamField>
+
+<ParamField body="min_turns" type="int">
+  Minimum conversation turns on this question.
+</ParamField>
+
+<ParamField body="max_turns" type="int">
+  Maximum conversation turns on this question.
+</ParamField>
+
+<ParamField body="expected_image" type="str">
+  Description of the expected upload, for `image_upload` questions.
+</ParamField>
+
+**Returns** [`QuestionOut`](/reference/models#questionout).
+
+<CodeGroup>
+
+```python Scale
+from deutero.models import ScaleConfig
+
+client.questions.create(
+    study.id,
+    question="How easy was setup?",
+    scale=ScaleConfig(minScale=1, maxScale=5, minLabel="Very hard", maxLabel="Very easy"),
+)
+```
+
+```python Ranking
+client.questions.create(
+    study.id,
+    question="Rank these by how much they matter to you.",
+    qtype="ranking",
+    options=["Price", "Speed", "Support", "Integrations"],
+)
+```
+
+```python Card sort
+client.questions.create(
+    study.id,
+    question="Sort these features by how often you use them.",
+    qtype="card_sort",
+    options=["Reports", "Alerts", "API", "Exports"],
+    groups=["Daily", "Weekly", "Rarely"],
+)
+```
+
+```python Image upload
+client.questions.create(
+    study.id,
+    question="Share a screenshot of your current dashboard.",
+    expected_image="A screenshot of an analytics dashboard",
+)
+```
+
+</CodeGroup>
+
+## generate()
+
+```python
+client.questions.generate(
+    study_id, *, n_questions: int | None = None, additional_instructions: str | None = None
+) -> GeneratedQuestionsOut
+```
+
+Write questions with AI and append them to the list. The generator works from the study's research question, objectives, methodology and target population, picks a mix of question types and writes in the study's language. New questions extend the existing list; nothing is replaced. Usually takes 30 seconds to 2 minutes.
+
+<ParamField body="n_questions" type="int" default="10">
+  How many questions to generate, from 3 to 20.
+</ParamField>
+
+<ParamField body="additional_instructions" type="str">
+  Extra guidance, such as `"start with two warm-up questions"`.
+</ParamField>
+
+**Returns** [`GeneratedQuestionsOut`](/reference/models#generatedquestionsout). `skipped_image_questions` counts image-upload questions the generator proposed but didn't add, because your plan has no vision-capable interview model.
+
+## update()
+
+```python
+client.questions.update(study_id, question_id, **fields) -> QuestionOut
+```
+
+Partially update a question. Takes the same optional fields as [`create()`](#create), including `question`; only the ones you pass change. Pass an empty list to clear `options`, `slots` or `groups`.
+
+**Returns** [`QuestionOut`](/reference/models#questionout).
+
+## delete()
+
+```python
+client.questions.delete(study_id, question_id) -> SuccessResponse
+```
+
+Delete a question and its attached images. The remaining questions are renumbered.
+
+**Returns** [`SuccessResponse`](/reference/models#successresponse).
+
+## reorder()
+
+```python
+client.questions.reorder(study_id, *, question_ids: Sequence[str | UUID]) -> QuestionListOut
+```
+
+Pass every question ID, in the interview order you want.
+
+```python
+questions = client.questions.list(study.id).questions
+client.questions.reorder(study.id, question_ids=[q.id for q in reversed(questions)])
+```
+
+**Returns** [`QuestionListOut`](/reference/models#questionlistout).
+
+## validate()
+
+```python
+client.questions.validate(study_id) -> ValidationOut
+```
+
+Review the questions before going live: an overall ethics pass or fail, plus per-question language quality and redundancy findings. It's the same check as the dashboard's **Validate** button. For a check of the whole study before publishing, use [`studies.validate()`](/reference/studies#validate).
+
+```python
+report = client.questions.validate(study.id)
+print("Ethics passed:", report.ethics_check.passed)
+for q in report.questions:
+    if q.has_issues:
+        print(q.number, q.language_issues, q.redundancy, q.suggestions)
+```
+
+**Returns** [`ValidationOut`](/reference/models#validationout).

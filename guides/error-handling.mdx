@@ -1,0 +1,134 @@
+---
+title: "Error handling"
+description: "Catch specific exceptions for API, network and webhook errors."
+icon: "triangle-exclamation"
+---
+
+Every exception the SDK raises inherits from `DeuteroError`. Errors returned by the API are `APIError` subclasses, chosen by HTTP status code.
+
+```python
+from deutero import (
+    APIError,
+    AuthenticationError,
+    ConflictError,
+    Deutero,
+    InsufficientCreditsError,
+    NotFoundError,
+    PermissionDeniedError,
+    RateLimitError,
+    ValidationError,
+)
+
+client = Deutero()
+
+try:
+    client.simulations.run(study_id, persona_id=persona_id, model_tier="premium")
+except PermissionDeniedError as e:      # catch before AuthenticationError
+    print(f"Not available on your plan: {e.message}")
+except AuthenticationError:
+    print("Invalid API key")
+except NotFoundError:
+    print("Study or persona not found")
+except InsufficientCreditsError as e:
+    print(f"Not enough credits: {e.message}")
+except ValidationError as e:
+    print(f"Invalid request: {e.message}")
+except RateLimitError:
+    print("Too many requests; retry later")
+except APIError as e:
+    print(f"API error {e.status_code}: {e.message}")
+```
+
+## Exception hierarchy
+
+```
+DeuteroError
+├── APIError
+│   ├── AuthenticationError       (401)
+│   │   └── PermissionDeniedError (403)
+│   ├── NotFoundError             (404)
+│   ├── ConflictError             (409)
+│   ├── ValidationError           (400, 422)
+│   ├── InsufficientCreditsError  (402)
+│   ├── RateLimitError            (429)
+│   ├── BadGatewayError           (502)
+│   └── InternalServerError       (other 5xx)
+├── ConnectionError
+├── TimeoutError
+└── WebhookVerificationError
+```
+
+Any other non-2xx status raises a plain `APIError`.
+
+<Note>
+  `deutero.ConnectionError` and `deutero.TimeoutError` shadow Python's built-ins of the same name. Import them qualified (`import deutero` and then `deutero.TimeoutError`) if you also use the built-ins.
+</Note>
+
+## What's on an `APIError`
+
+<ResponseField name="message" type="str">
+  A readable summary, such as `HTTP 404: Study not found`. Field-level validation errors are joined into one line, for example `name: field required; max_responses: must be positive`.
+</ResponseField>
+
+<ResponseField name="status_code" type="int">
+  The HTTP status code.
+</ResponseField>
+
+<ResponseField name="body" type="Any">
+  The parsed response body: a dict for JSON responses, otherwise the raw text. This is where the details live for refusals such as a blocked publish or an invalid flow.
+</ResponseField>
+
+<ResponseField name="request_id" type="str | None">
+  The `x-request-id` response header, if present. Include it when contacting support.
+</ResponseField>
+
+## Common cases
+
+<AccordionGroup>
+  <Accordion title="A publish is refused (409)">
+    `studies.publish` raises `ConflictError` when the plan's open-study limit, credits or validation block it. `e.body` carries the refusal code, the issues and the `validation_run_id`. If only methodological issues remain, publish again with `acknowledge_validation_run_id`. See [Publish](/guides/study-lifecycle#4-publish).
+  </Accordion>
+
+  <Accordion title="An interview flow is invalid (422) or stale (409)">
+    `graph.set` and `graph.patch` save nothing unless the result is valid. An invalid flow raises `ValidationError` with every problem in `e.body`. A stale `expected_graph_version` raises `ConflictError`: re-read the flow and retry. See [Safe concurrent edits](/guides/interview-flows#safe-concurrent-edits).
+  </Accordion>
+
+  <Accordion title="Not enough credits (402)">
+    `InsufficientCreditsError` is raised when the organization can't cover an operation, such as a simulation. Check your balance with `client.credits.get_balance()`.
+  </Accordion>
+
+  <Accordion title="Rate limited (429)">
+    Back off and retry. `studies.draft_from_site` also returns 429 once a site's draft allowance is used up.
+  </Accordion>
+
+  <Accordion title="Slow model calls time out">
+    Drafting, question generation and validation can take a minute or more. If you see `TimeoutError`, raise the client [timeout](/get-started/configuration#custom-timeout).
+  </Accordion>
+</AccordionGroup>
+
+## Retrying
+
+The SDK doesn't retry failed requests. To retry connection failures, pass an `httpx` client with a retrying transport:
+
+```python
+import httpx
+
+client = Deutero(http_client=httpx.Client(transport=httpx.HTTPTransport(retries=3), timeout=120))
+```
+
+For 429 and 5xx responses, wrap calls in your own backoff, for example with [tenacity](https://tenacity.readthedocs.io):
+
+```python
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
+from deutero import InternalServerError, RateLimitError
+
+
+@retry(
+    retry=retry_if_exception_type((RateLimitError, InternalServerError)),
+    wait=wait_exponential(multiplier=1, max=30),
+    stop=stop_after_attempt(5),
+)
+def get_stats(study_id):
+    return client.studies.get_stats(study_id)
+```

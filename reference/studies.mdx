@@ -1,0 +1,246 @@
+---
+title: "client.studies"
+sidebarTitle: "Studies"
+description: "Create, configure, draft, validate, publish and pause studies."
+icon: "flask"
+---
+
+A study is one piece of research: its brief, model settings and participation links. Its welcome, screening, characteristics, questions, flow and recruitment are configured through their own resources. See the [Study lifecycle](/guides/study-lifecycle) guide for the full workflow.
+
+## create()
+
+```python
+client.studies.create(*, project_id, name, **fields) -> StudyOut
+```
+
+Create a study inside a project. It starts as a `draft`, in linear interview mode, with an empty question list.
+
+<ParamField body="project_id" type="str | UUID" required>
+  Project to create the study in.
+</ParamField>
+
+<ParamField body="name" type="str" required>
+  Study name, shown to participants.
+</ParamField>
+
+<ParamField body="description" type="str">
+  Study description.
+</ParamField>
+
+<ParamField body="survey_type" type="str | StudyType" default="sociology">
+  `sociology`, `user_experience`, `customer_development` or `polling`.
+</ParamField>
+
+<ParamField body="research_question" type="str">
+  The research question or questions.
+</ParamField>
+
+<ParamField body="objectives" type="str">
+  Research objectives.
+</ParamField>
+
+<ParamField body="target_population" type="str">
+  Who you want to interview.
+</ParamField>
+
+<ParamField body="methodology" type="str">
+  Methodology notes.
+</ParamField>
+
+<ParamField body="benefits" type="str">
+  Benefits of taking part. Used in consent text.
+</ParamField>
+
+<ParamField body="risks" type="str">
+  Risks of taking part. Used in consent text.
+</ParamField>
+
+<ParamField body="support_contact" type="str">
+  Researcher or support contact.
+</ParamField>
+
+<ParamField body="institution" type="str">
+  Institutional affiliation.
+</ParamField>
+
+<ParamField body="language" type="str" default="English">
+  Primary interview language.
+</ParamField>
+
+<ParamField body="anonymous" type="bool">
+  Skip collecting participants' first names.
+</ParamField>
+
+<ParamField body="model_tier" type="str | ModelTier" default="open_weights">
+  `open_weights`, `standard` or `premium`. `frontier` is accepted by the API as a deprecated alias for `premium`.
+</ParamField>
+
+<ParamField body="redirect_url" type="str">
+  Where participants go after completing. May contain `{{external_participant_id}}`.
+</ParamField>
+
+<ParamField body="max_responses" type="int">
+  Response quota. Omit for unlimited.
+</ParamField>
+
+<ParamField body="voice_enabled" type="bool">
+  Offer a voice-call interview link alongside text chat.
+</ParamField>
+
+<ParamField body="video_enabled" type="bool">
+  Offer a video-call interview link alongside text chat.
+</ParamField>
+
+**Returns** [`StudyOut`](/reference/models#studyout).
+
+## list()
+
+```python
+client.studies.list(project_id) -> StudyListOut
+```
+
+List the studies in a project.
+
+**Returns** [`StudyListOut`](/reference/models#studylistout), with `studies` holding a list of [`StudySummary`](/reference/models#studysummary).
+
+## get()
+
+```python
+client.studies.get(study_id) -> StudyOut
+```
+
+Get a study's full configuration, its status, setup counts (such as `question_count` and `screening_enabled`) and participation links.
+
+**Returns** [`StudyOut`](/reference/models#studyout).
+
+## update()
+
+```python
+client.studies.update(study_id, **fields) -> StudyOut
+```
+
+Partially update a study. Takes the same optional fields as [`create()`](#create) except `project_id`; only the ones you pass change. To remove a response quota, use [`recruitment.update(clear_max_responses=True)`](/reference/recruitment#update).
+
+**Returns** [`StudyOut`](/reference/models#studyout).
+
+## get_stats()
+
+```python
+client.studies.get_stats(study_id) -> StudyStatsOut
+```
+
+Participation statistics: interview counts, completion rate and quota fill. Simulated interviews and test runs are counted separately.
+
+**Returns** [`StudyStatsOut`](/reference/models#studystatsout).
+
+## draft()
+
+```python
+client.studies.draft(*, survey_type, language=None, **brief) -> StudyDraft
+```
+
+Turn a short research brief into study fields with AI. Nothing is stored: pass the draft's fields to [`create()`](#create), then fill in questions with [`questions.generate()`](/reference/questions#generate). Usually takes 20–40 seconds.
+
+<ParamField body="survey_type" type="str | StudyType" required>
+  The methodology. It decides which brief fields are read.
+</ParamField>
+
+<ParamField body="language" type="str" default="English">
+  Language to write the draft in, which also becomes the interview language.
+</ParamField>
+
+Only the brief fields for the chosen `survey_type` are read:
+
+| `survey_type` | Required | Optional |
+|---|---|---|
+| `sociology` | `research_question`, `population_of_interest` | `context_or_setting`, `key_concepts`, `scope_and_boundaries` |
+| `customer_development` | `problem_hypothesis`, `customer_segment` | `solution_concept`, `key_assumptions`, `success_criteria` |
+| `user_experience` | `business_context`, `research_need` | `target_users`, `research_type` (`discover`, `test` or `ideate`), `constraints` |
+| `polling` | `research_question` | `population_segment`, `geographic_scope`, `survey_context`, `data_quality_requirements` |
+
+All brief fields are strings.
+
+**Returns** [`StudyDraft`](/reference/models#studydraft).
+
+```python
+draft = client.studies.draft(
+    survey_type="user_experience",
+    business_context="B2B invoicing tool for agencies",
+    research_need="Understand why trial users don't connect their bank",
+    research_type="discover",
+)
+study = client.studies.create(project_id=project.id, **draft.model_dump(exclude_none=True))
+```
+
+## draft_from_site()
+
+```python
+client.studies.draft_from_site(*, url: str, language: str | None = None) -> StudyDraftFromSiteOut
+```
+
+Read a product landing page and draft a user research study for it. Nothing is stored. When `is_valid` is true, pass `draft` to [`create()`](#create); otherwise `draft` is `None` and `rationale` explains what was missing. Each site allows a limited number of drafts per user (`generations_used` of `generations_limit`), and the API returns 429 (`RateLimitError`) after that. Usually takes 20–40 seconds.
+
+<ParamField body="url" type="str" required>
+  Public http(s) URL of the product or startup landing page.
+</ParamField>
+
+<ParamField body="language" type="str" default="English">
+  Language to write the draft and rationale in.
+</ParamField>
+
+**Returns** [`StudyDraftFromSiteOut`](/reference/models#studydraftfromsiteout).
+
+## get_publication()
+
+```python
+client.studies.get_publication(study_id) -> PublicationStatusOut
+```
+
+The study's publication status (`draft`, `open`, `paused` or `closed`), how many studies your plan may have open, the publish-time credit check, the latest validation run and whether the configuration has changed since publishing.
+
+**Returns** [`PublicationStatusOut`](/reference/models#publicationstatusout).
+
+## validate()
+
+```python
+client.studies.validate(study_id) -> ValidationRunOut
+```
+
+Validate everything participants will read (questions or flow, welcome, screening and characteristics) without publishing. The result is recorded and reused by [`publish()`](#publish) while the configuration is unchanged. This is a model call, so allow up to a minute.
+
+`outcome` is `passed`, `methodological_issues`, `ethical_issues` or `blocking_issues`. Each issue's `severity` is `ethical` or `blocking` (both must be fixed) or `methodological` (can be acknowledged).
+
+**Returns** [`ValidationRunOut`](/reference/models#validationrunout).
+
+## publish()
+
+```python
+client.studies.publish(
+    study_id,
+    *,
+    acknowledge_validation_run_id=None,
+    acknowledge_credit_shortfall=None,
+) -> PublishOut
+```
+
+Open the study to participants, or resume a paused one. Checks the plan's open-study limit, credits and validation first. A refusal raises `ConflictError`, whose `body` carries the refusal code, the issues and the `validation_run_id`. Publishing a study that's already open does nothing and returns `already_open=True`.
+
+<ParamField body="acknowledge_validation_run_id" type="str | UUID">
+  To publish despite methodological issues, pass the `validation_run_id` from the refusal. Ethical and blocking issues can't be acknowledged.
+</ParamField>
+
+<ParamField body="acknowledge_credit_shortfall" type="bool">
+  Publish even though your balance covers at least one interview but not every remaining response.
+</ParamField>
+
+**Returns** [`PublishOut`](/reference/models#publishout).
+
+## pause()
+
+```python
+client.studies.pause(study_id) -> PauseOut
+```
+
+Stop admitting new participants and unlock editing. Interviews already running finish on the configuration they started with; `in_flight_count` says how many. Resume with [`publish()`](#publish).
+
+**Returns** [`PauseOut`](/reference/models#pauseout).

@@ -1,0 +1,130 @@
+---
+title: "client.interviews"
+sidebarTitle: "Interviews"
+description: "Interview records, lookups by your own participant ID, transcripts and flow effects."
+icon: "comments"
+---
+
+Test runs (your own interviews through the dashboard's **Try Interview** or **Preview**) and simulated interviews are left out unless you ask for them. See [Analyzing responses](/guides/analyzing-responses#test-runs-and-simulations).
+
+## list()
+
+```python
+client.interviews.list(
+    study_id,
+    *,
+    completed: bool | None = None,
+    simulated: bool | None = None,
+    test_runs: bool | None = None,
+    external_participant_id: str | None = None,
+    started_after: str | datetime | None = None,
+    started_before: str | datetime | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> InterviewListOut
+```
+
+A study's interviews, newest first.
+
+<ParamField body="completed" type="bool">
+  Filter by completion status.
+</ParamField>
+
+<ParamField body="simulated" type="bool">
+  `True` for only simulated interviews, `False` for only real ones. Only real interviews are returned when omitted.
+</ParamField>
+
+<ParamField body="test_runs" type="bool">
+  `True` for only test runs, `False` to leave them out. Test runs are left out when omitted.
+</ParamField>
+
+<ParamField body="external_participant_id" type="str">
+  Only interviews that arrived with this ID of yours.
+</ParamField>
+
+<ParamField body="started_after" type="str | datetime">
+  Only interviews started after this time.
+</ParamField>
+
+<ParamField body="started_before" type="str | datetime">
+  Only interviews started before this time.
+</ParamField>
+
+<ParamField body="limit" type="int" default="50">
+  Page size.
+</ParamField>
+
+<ParamField body="offset" type="int">
+  Page offset.
+</ParamField>
+
+**Returns** [`InterviewListOut`](/reference/models#interviewlistout), with `interviews` holding a list of [`InterviewSummary`](/reference/models#interviewsummary).
+
+## find_by_external_id()
+
+```python
+client.interviews.find_by_external_id(
+    study_id,
+    *,
+    external_participant_id: str,
+    include_simulated: bool | None = None,
+    include_test_runs: bool | None = None,
+    limit: int | None = None,
+) -> InterviewDetailListOut
+```
+
+Every interview that arrived carrying your participant ID, in full detail.
+
+<ParamField body="external_participant_id" type="str" required>
+  Your ID for the participant, exactly as the entry link (`?participant_id=`) or embed metadata carried it.
+</ParamField>
+
+<ParamField body="include_simulated" type="bool" default="False">
+  Include simulated interviews.
+</ParamField>
+
+<ParamField body="include_test_runs" type="bool" default="False">
+  Include test runs.
+</ParamField>
+
+<ParamField body="limit" type="int" default="20">
+  The most recent N attempts.
+</ParamField>
+
+**Returns** [`InterviewDetailListOut`](/reference/models#interviewdetaillistout).
+
+## get()
+
+```python
+client.interviews.get(interview_id) -> InterviewDetailOut
+```
+
+One interview with its screening answers (`qualifications`), `characteristics`, `embed_metadata` and captured flow `variables`.
+
+**Returns** [`InterviewDetailOut`](/reference/models#interviewdetailout).
+
+## get_transcript()
+
+```python
+client.interviews.get_transcript(interview_id) -> TranscriptOut
+```
+
+The interview's messages in order, plus captured variables and branch `decisions`.
+
+```python
+t = client.interviews.get_transcript(interview_id)
+for m in t.messages:
+    print(f"[{m.type}] {m.content}")
+```
+
+**Returns** [`TranscriptOut`](/reference/models#transcriptout).
+
+## get_fetches_and_signals()
+
+```python
+client.interviews.get_fetches_and_signals(interview_id) -> InterviewEffectsOut
+```
+
+What an interview flow's data fetches and signals did: URLs, request bodies, status codes and errors. Empty for linear studies.
+
+**Returns** [`InterviewEffectsOut`](/reference/models#intervieweffectsout).

@@ -1,0 +1,23 @@
+---
+title: "client.credits"
+sidebarTitle: "Credits"
+description: "Your organization's credit balance."
+icon: "coins"
+---
+
+## get_balance()
+
+```python
+client.credits.get_balance() -> CreditBalanceOut
+```
+
+The organization's current credit balance: what's available, used and reserved, and where it came from (base allowance, purchases and rollover).
+
+```python
+balance = client.credits.get_balance()
+print(f"{balance.net_available:.1f} available, {balance.credits_reserved:.1f} reserved")
+```
+
+**Returns** [`CreditBalanceOut`](/reference/models#creditbalanceout).
+
+When credits run out, Deutero sends a [`credits.exhausted`](/guides/receiving-webhooks#event-types) webhook. Calls that need credits you don't have raise `InsufficientCreditsError`.

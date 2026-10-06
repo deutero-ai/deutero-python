@@ -1,0 +1,124 @@
+---
+title: "Quickstart"
+description: "Install the SDK and take a study from nothing to a shareable participation link."
+icon: "rocket"
+---
+
+## Install
+
+<CodeGroup>
+
+```bash pip
+pip install deutero
+```
+
+```bash uv
+uv add deutero
+```
+
+</CodeGroup>
+
+The SDK requires Python 3.9 or later.
+
+## Set your API key
+
+Create an API key on the settings page of the [Deutero dashboard](https://dashboard.deutero.ai), then export it:
+
+```bash
+export DEUTERO_API_KEY="dtro_..."
+```
+
+`Deutero()` reads it from the environment. See [Authentication](/get-started/authentication) for other options.
+
+## Run a study end to end
+
+<Steps>
+  <Step title="Create a project and a study">
+    Studies live inside projects. A new study starts as a **draft** with an empty question list.
+
+    ```python
+    from deutero import Deutero
+
+    client = Deutero()
+
+    project = client.projects.create(name="Onboarding research")
+    study = client.studies.create(
+        project_id=project.id,
+        name="Why new users drop off",
+        survey_type="user_experience",
+        research_question="Where does onboarding lose people?",
+        target_population="Product managers at 50-500 person companies",
+    )
+    ```
+  </Step>
+
+  <Step title="Write the welcome message and questions">
+    The welcome message is the first thing participants read. Questions can be free text, scales, choices and more.
+
+    ```python
+    client.welcome.set(
+        study.id,
+        message="Thanks for joining! This takes about 10 minutes.",
+        consent=True,
+    )
+
+    client.questions.create(
+        study.id,
+        question="Walk me through your first day with the product.",
+        max_turns=6,
+    )
+    client.questions.create(
+        study.id,
+        question="How easy was setup?",
+        qtype="scale",
+        scale={"minScale": 1, "maxScale": 5, "minLabel": "Very hard", "maxLabel": "Very easy"},
+    )
+
+    report = client.questions.validate(study.id)
+    print("Ethics check passed:", report.ethics_check.passed)
+    ```
+
+    <Tip>
+      Rather write nothing by hand? `client.questions.generate(study.id, n_questions=8)` writes questions from the study's research question and population.
+    </Tip>
+  </Step>
+
+  <Step title="Rehearse with an AI participant">
+    Simulations run the real interview against an AI persona, so you can read a transcript before recruiting anyone.
+
+    ```python
+    personas = client.personas.generate(study.id, count=1)
+    run = client.simulations.run(study.id, persona_id=personas.personas[0].id)
+    print("Simulation started:", run.id, run.status)
+    ```
+  </Step>
+
+  <Step title="Publish and share the link">
+    Publishing validates the study, checks your credits and plan, and opens it to participants.
+
+    ```python
+    client.studies.publish(study.id)
+
+    recruitment = client.recruitment.get(study.id)
+    print("Share this link:", recruitment.participation_url)
+    ```
+  </Step>
+
+  <Step title="Monitor responses">
+    ```python
+    stats = client.studies.get_stats(study.id)
+    print(f"{stats.completed_interviews}/{stats.total_interviews} completed")
+    ```
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Study lifecycle" icon="arrows-spin" href="/guides/study-lifecycle">
+    Drafting with AI, validation, publishing and pausing.
+  </Card>
+  <Card title="Analyze responses" icon="chart-scatter" href="/guides/analyzing-responses">
+    Transcripts, search and thematic clustering.
+  </Card>
+</CardGroup>

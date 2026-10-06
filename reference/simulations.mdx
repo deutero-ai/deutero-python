@@ -1,0 +1,81 @@
+---
+title: "client.simulations"
+sidebarTitle: "Simulations"
+description: "Start, list, poll and delete simulated interview runs."
+icon: "robot"
+---
+
+See [Simulations](/guides/simulations) for polling patterns and running several at once.
+
+## run()
+
+```python
+client.simulations.run(
+    study_id,
+    *,
+    persona_id=None,
+    persona: str | None = None,
+    model_tier=None,
+    deliver_signals: bool | None = None,
+) -> SimulationStartOut
+```
+
+Start one simulated interview and return immediately. The run continues in the background: poll [`get()`](#get) until `status` is `completed` or `failed`. Credits are reserved up front, and a run that would exceed your balance raises `InsufficientCreditsError`.
+
+<ParamField body="persona_id" type="str | UUID">
+  A stored persona to play the participant. Omit both this and `persona` for a generic participant.
+</ParamField>
+
+<ParamField body="persona" type="str">
+  Ad-hoc persona text, used when no `persona_id` is given.
+</ParamField>
+
+<ParamField body="model_tier" type="str | ModelTier" default="open_weights">
+  `open_weights`, `standard` or `premium`.
+</ParamField>
+
+<ParamField body="deliver_signals" type="bool">
+  Let the flow's "Send a signal" steps reach their real endpoints.
+</ParamField>
+
+**Returns** [`SimulationStartOut`](/reference/models#simulationstartout), which includes `estimated_credits`.
+
+## get()
+
+```python
+client.simulations.get(simulation_id) -> SimulationOut
+```
+
+A run's current state: `status`, `interview_id`, `credits_used` and any `error`.
+
+**Returns** [`SimulationOut`](/reference/models#simulationout).
+
+## list()
+
+```python
+client.simulations.list(study_id, *, status: str | None = None, limit: int | None = None, offset: int | None = None) -> SimulationListOut
+```
+
+The study's runs, newest first.
+
+<ParamField body="status" type="str">
+  `running`, `completed` or `failed`.
+</ParamField>
+
+<ParamField body="limit" type="int" default="50">
+  Page size.
+</ParamField>
+
+<ParamField body="offset" type="int">
+  Page offset.
+</ParamField>
+
+**Returns** [`SimulationListOut`](/reference/models#simulationlistout).
+
+## delete()
+
+```python
+client.simulations.delete(simulation_id) -> None
+```
+
+Delete a finished run's record. The interview it produced is kept.

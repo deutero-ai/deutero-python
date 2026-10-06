@@ -1,0 +1,80 @@
+---
+title: "Exceptions"
+description: "Every exception class the SDK raises, and the HTTP status codes they map to."
+icon: "triangle-exclamation"
+---
+
+All exceptions are importable from `deutero` and from `deutero.exceptions`. For patterns and examples, see [Error handling](/guides/error-handling).
+
+```
+DeuteroError
+├── APIError
+│   ├── AuthenticationError       (401)
+│   │   └── PermissionDeniedError (403)
+│   ├── NotFoundError             (404)
+│   ├── ConflictError             (409)
+│   ├── ValidationError           (400, 422)
+│   ├── InsufficientCreditsError  (402)
+│   ├── RateLimitError            (429)
+│   ├── BadGatewayError           (502)
+│   └── InternalServerError       (other 5xx)
+├── ConnectionError
+├── TimeoutError
+└── WebhookVerificationError
+```
+
+## DeuteroError
+
+The base class for every SDK exception.
+
+<ResponseField name="message" type="str">
+  A human-readable description.
+</ResponseField>
+
+## APIError
+
+Raised for any non-2xx API response. Subclasses are chosen by status code; a status with no specific subclass raises `APIError` itself.
+
+<ResponseField name="message" type="str">
+  `HTTP <status>: <detail>`. Lists of field-level validation errors are joined into one readable line.
+</ResponseField>
+
+<ResponseField name="status_code" type="int">
+  The HTTP status code.
+</ResponseField>
+
+<ResponseField name="body" type="Any">
+  The parsed response body (a dict for JSON, otherwise the text), or `None` for an empty body.
+</ResponseField>
+
+<ResponseField name="request_id" type="str | None">
+  The `x-request-id` response header, if present.
+</ResponseField>
+
+## API error subclasses
+
+| Exception | Status | Raised when |
+|---|---|---|
+| `AuthenticationError` | 401 | The API key is missing or invalid. |
+| `PermissionDeniedError` | 403 | The key is valid but not allowed to do this, for example because of a plan limit. Subclasses `AuthenticationError`. |
+| `NotFoundError` | 404 | The resource doesn't exist or isn't in your organization. |
+| `ConflictError` | 409 | A write conflicts with current state: a refused publish, or a stale `expected_graph_version`. |
+| `ValidationError` | 400, 422 | The request failed validation. For interview-flow writes, `body` carries every problem found. |
+| `InsufficientCreditsError` | 402 | Your organization lacks the credits for the operation. |
+| `RateLimitError` | 429 | You've exceeded a rate limit or a usage allowance. |
+| `BadGatewayError` | 502 | An upstream service failed. |
+| `InternalServerError` | other 5xx | A server-side error. |
+
+## Client-side errors
+
+| Exception | Raised when |
+|---|---|
+| `ConnectionError` | A network connection to the API couldn't be established. |
+| `TimeoutError` | A request exceeded the client timeout. |
+| `WebhookVerificationError` | A webhook delivery failed signature or timestamp verification, or isn't an event. Raised by [`deutero.webhooks`](/reference/webhook-verification). |
+
+<Note>
+  `ConnectionError` and `TimeoutError` share names with Python built-ins but don't subclass them. Catch `deutero.ConnectionError` and `deutero.TimeoutError` explicitly.
+</Note>
+
+The client constructor raises the built-in `ValueError` when no API key is provided.

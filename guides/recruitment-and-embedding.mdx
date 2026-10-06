@@ -1,0 +1,116 @@
+---
+title: "Recruitment and embedding"
+description: "Share participation links, attribute arrivals to your own users, cap responses, and embed the interview in your site."
+icon: "user-plus"
+---
+
+## Participation links
+
+Once a study is [published](/guides/study-lifecycle#4-publish), share its participation link:
+
+```python
+r = client.recruitment.get(study.id)
+print(r.participation_url)
+print(r.short_participation_url)
+```
+
+If the study has `voice_enabled` or `video_enabled` set, you'll also get `voice_participation_url` and `video_participation_url`, each with a short variant.
+
+### Custom short links, quotas and redirects
+
+```python
+client.recruitment.update(
+    study.id,
+    short_url_slug="onboarding-2026",      # lowercase letters, digits, hyphens; unique across all studies
+    max_responses=200,                     # response quota
+    redirect_url="https://example.com/thanks?pid={{external_participant_id}}",
+)
+
+client.recruitment.update(study.id, clear_max_responses=True)  # remove the quota
+```
+
+The response reports `completed_interviews` and `quota_remaining`. Subscribe to the [`study.full`](/guides/receiving-webhooks#event-types) webhook to hear when a study fills up.
+
+<Tip>
+  Check `redirect_url_warning` on the response. It's set when the API has a concern about the redirect URL you saved.
+</Tip>
+
+## Attribute participants to your own IDs
+
+Add query parameters to any participation link:
+
+| Parameter | Recorded on the interview as | Use it for |
+|---|---|---|
+| `source=<tag>` | `web_source` | The campaign or channel the participant came from |
+| `participant_id=<your id>` | `external_participant_id` | Joining the interview back to a user in your system |
+
+```python
+link = f"{r.participation_url}&source=newsletter&participant_id={user.id}"
+```
+
+Then look the person up later:
+
+```python
+found = client.interviews.find_by_external_id(study.id, external_participant_id=str(user.id))
+for interview in found.interviews:
+    print(interview.id, interview.completed, interview.web_source)
+```
+
+You can also filter [`interviews.list`](/reference/interviews#list), [`transcripts.list`](/reference/transcripts#list), [`transcripts.search`](/reference/transcripts#search) and [`webhooks.list_deliveries`](/reference/webhooks#list_deliveries) by `external_participant_id`. Any `redirect_url` can include `{{external_participant_id}}` to pass the ID on.
+
+<Warning>
+  `participant_id` and `source` come from the link, so a participant can change them. Don't treat them as proof of identity. For verified values, use [signed embed metadata](#signed-metadata).
+</Warning>
+
+## Embed the interview
+
+To run the interview inside your own site or app, create a publishable key for the origins it'll load on, then generate the install snippet.
+
+<Steps>
+  <Step title="Create a key">
+    ```python
+    key = client.embed.create_key(
+        allowed_origins=["https://app.example.com"],
+        study_id=study.id,  # omit to allow any study in your organization
+    )
+    publishable_key = key["publishable_key"]
+    signing_secret = key["signing_secret"]
+    ```
+
+    <Warning>
+      `create_key` is the **only** time `publishable_key` and `signing_secret` are returned. Store them before doing anything else.
+    </Warning>
+
+    Origins must be exact (scheme, host and port). The `"*"` wildcard isn't allowed.
+  </Step>
+
+  <Step title="Get the snippet">
+    ```python
+    snippet = client.embed.get_snippet(study.id, publishable_key=publishable_key, mode="chat")
+    print(snippet.snippet)
+    ```
+
+    Paste `snippet.snippet` into your page. `mode` sets the widget's presentation (`data-mode`) and defaults to `chat`.
+  </Step>
+</Steps>
+
+### Signed metadata
+
+The basic snippet passes metadata through a `data-metadata` attribute, which a visitor can edit. When the interview needs to rely on a metadata value, use `snippet.signed_snippet`. Your server mints a JWS (HS256) token with the key's `signing_secret`, and the token's metadata claim is recorded as verified, overriding any page-supplied value of the same name.
+
+Each metadata item on an interview carries its provenance:
+
+```python
+for item in client.interviews.get(interview_id).embed_metadata:
+    print(item.key, item.value, item.provenance)  # "token" = verified, "client" = page-supplied
+```
+
+### Managing keys
+
+```python
+for k in client.embed.list_keys().keys:   # secrets are never included
+    print(k)
+
+client.embed.update_key(key_id, allowed_origins=["https://app.example.com", "https://staging.example.com"])
+client.embed.update_key(key_id, status="revoked")
+```

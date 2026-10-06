@@ -1,0 +1,137 @@
+---
+title: "deutero.webhooks"
+sidebarTitle: "Webhook verification"
+description: "Verify, parse and sign Standard Webhooks deliveries. Needs no API key."
+icon: "shield-check"
+---
+
+```python
+from deutero import webhooks
+```
+
+Functions for receiving what Deutero POSTs to you: organization events (secret from [`client.webhooks.create()`](/reference/webhooks#create)) and interview-flow signals (per-step secret from [`client.graph.get_signals()`](/reference/graph#get_signals)). The module makes no API calls. See [Receiving webhooks](/guides/receiving-webhooks) for a full receiver.
+
+`payload` arguments accept `bytes`, `bytearray` or `str`, and should be the raw request body exactly as received. `headers` can be any mapping; lookup is case-insensitive.
+
+## unwrap()
+
+```python
+webhooks.unwrap(payload, headers, *, secret: str, tolerance: int | None = 300) -> WebhookEvent
+```
+
+Verify a delivery and parse it into an event. This is the function most receivers need.
+
+<ParamField body="payload" type="bytes | bytearray | str" required>
+  The raw request body.
+</ParamField>
+
+<ParamField body="headers" type="Mapping[str, str]" required>
+  The request headers.
+</ParamField>
+
+<ParamField body="secret" type="str" required>
+  The `whsec_...` signing secret for the endpoint or signal step.
+</ParamField>
+
+<ParamField body="tolerance" type="int | None" default="300">
+  The maximum age and clock skew of `webhook-timestamp`, in seconds. `None` disables the check, for example when replaying stored deliveries.
+</ParamField>
+
+**Returns** a typed event such as `InterviewCompletedEvent` for known organization events, or a plain `WebhookEvent` for signals and unrecognized types.
+
+**Raises** `WebhookVerificationError` if the delivery isn't authentic or isn't an event.
+
+## verify()
+
+```python
+webhooks.verify(payload, headers, *, secret: str, tolerance: int | None = 300) -> None
+```
+
+Check a delivery's signature and timestamp without parsing it. Takes the same arguments as [`unwrap()`](#unwrap).
+
+**Raises** `WebhookVerificationError` if headers are missing, the timestamp is outside the tolerance, or no signature matches.
+
+## parse_event()
+
+```python
+webhooks.parse_event(payload, headers=None) -> WebhookEvent
+```
+
+Parse a delivery into an event **without verifying it**. Use it only on payloads you've already verified, or in tests.
+
+**Raises** `WebhookVerificationError` if the body isn't a JSON event envelope.
+
+## sign()
+
+```python
+webhooks.sign(payload, *, secret: str, msg_id: str, timestamp: int | None = None) -> dict[str, str]
+```
+
+Build the signature headers Deutero would send with `payload`, for testing your receiver locally.
+
+<ParamField body="payload" type="bytes | bytearray | str" required>
+  The body to sign.
+</ParamField>
+
+<ParamField body="secret" type="str" required>
+  The `whsec_...` signing secret.
+</ParamField>
+
+<ParamField body="msg_id" type="str" required>
+  The message ID, sent as `webhook-id`.
+</ParamField>
+
+<ParamField body="timestamp" type="int">
+  Unix time to sign with. Defaults to now.
+</ParamField>
+
+**Returns** a dict of headers: `webhook-id`, `webhook-timestamp` and `webhook-signature`.
+
+## Constants
+
+| Name | Value | Meaning |
+|---|---|---|
+| `DEFAULT_TOLERANCE` | `300` | Default timestamp tolerance, in seconds |
+| `EVENT_TYPES` | `dict[str, type[WebhookEvent]]` | Maps each known event `type` to its model class |
+
+## Event models
+
+### WebhookEvent
+
+The base class for every event, and the type returned for signals and unknown event types.
+
+<ResponseField name="type" type="str">
+  The event type, such as `interview.completed`. For signals, the step's signal type.
+</ResponseField>
+
+<ResponseField name="timestamp" type="datetime | None">
+  When the event happened.
+</ResponseField>
+
+<ResponseField name="data" type="Any">
+  The event payload. A typed model on the subclasses below, otherwise a dict.
+</ResponseField>
+
+<ResponseField name="webhook_id" type="str | None">
+  The `webhook-id` header. Unique per message, so use it to deduplicate retries.
+</ResponseField>
+
+<ResponseField name="simulated" type="bool">
+  `True` when the `X-Deutero-Simulated` header is set, meaning a signal from a simulated interview.
+</ResponseField>
+
+### Typed events
+
+| Event `type` | Model | `data` model and fields |
+|---|---|---|
+| `interview.started` | `InterviewStartedEvent` | `InterviewStartedData`: `interview_id`, `survey_id`, `participant_id`, `external_participant_id`, `web_source` |
+| `interview.completed` | `InterviewCompletedEvent` | `InterviewCompletedData`: the above, plus `completed` |
+| `analysis.completed` | `AnalysisCompletedEvent` | `AnalysisCompletedData`: `interview_id`, `survey_id` |
+| `simulation.completed` | `SimulationCompletedEvent` | `SimulationCompletedData`: `interview_id`, `survey_id` |
+| `study.created` | `StudyCreatedEvent` | `StudyCreatedData`: `study_id`, `survey_id`, `name`, `project_id`, `created_via` |
+| `credits.exhausted` | `CreditsExhaustedEvent` | `CreditsExhaustedData`: `organization_id` |
+| `study.full` | `StudyFullEvent` | `StudyFullData`: `survey_id`, `survey_name` |
+
+All `data` fields are optional strings, except `completed`, which is an optional bool. `survey_id` is the study ID under its older name. `participant_id` is Deutero's own ID for the participant. `external_participant_id` and `web_source` come from the participant's link and aren't authenticated.
+
+If a known event type arrives with `data` that no longer fits its model, `unwrap` still returns it, as a plain `WebhookEvent`.

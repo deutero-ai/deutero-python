@@ -1,0 +1,55 @@
+---
+title: "Async usage"
+description: "Use AsyncDeutero with asyncio. Every method has the same signature as the sync client."
+icon: "bolt-lightning"
+---
+
+`AsyncDeutero` mirrors `Deutero`: the same resources, the same methods and the same arguments, with every method returning an awaitable.
+
+```python
+import asyncio
+
+from deutero import AsyncDeutero
+
+
+async def main() -> None:
+    async with AsyncDeutero() as client:
+        projects = await client.projects.list()
+        for project in projects.projects:
+            print(project.name, project.study_count)
+
+
+asyncio.run(main())
+```
+
+## Concurrent requests
+
+Use `asyncio.gather` to fan out independent calls, such as fetching every transcript for a page of interviews:
+
+```python
+async def transcripts_for(study_id: str) -> list:
+    async with AsyncDeutero() as client:
+        page = await client.interviews.list(study_id, completed=True, limit=50)
+        return await asyncio.gather(
+            *(client.interviews.get_transcript(i.id) for i in page.interviews)
+        )
+```
+
+<Tip>
+  For bulk export, [`transcripts.list`](/reference/transcripts#list) returns full transcripts a page at a time in a single request, which is usually cheaper than fetching each one.
+</Tip>
+
+## Polling a simulation
+
+Simulations run in the background. Poll without blocking the event loop:
+
+```python
+async def wait_for(client: AsyncDeutero, simulation_id: str):
+    while (sim := await client.simulations.get(simulation_id)).status == "running":
+        await asyncio.sleep(10)
+    return sim
+```
+
+## Closing the client
+
+Use `async with`, or call `await client.close()` when you're done, to release the connection pool. If you passed your own `httpx.AsyncClient`, you're responsible for closing it.

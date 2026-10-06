@@ -1,0 +1,101 @@
+---
+title: "client.transcripts"
+sidebarTitle: "Transcripts"
+description: "Bulk transcript export and full-text, semantic or hybrid search across answers."
+icon: "magnifying-glass"
+---
+
+## list()
+
+```python
+client.transcripts.list(
+    study_id,
+    *,
+    completed: bool | None = None,
+    include_simulated: bool | None = None,
+    include_test_runs: bool | None = None,
+    external_participant_id: str | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> TranscriptsBulkOut
+```
+
+Full transcripts in bulk, newest interview first, paginated by interview.
+
+<ParamField body="completed" type="bool">
+  Filter by completion status.
+</ParamField>
+
+<ParamField body="include_simulated" type="bool" default="False">
+  Include simulated interviews.
+</ParamField>
+
+<ParamField body="include_test_runs" type="bool" default="False">
+  Include test runs.
+</ParamField>
+
+<ParamField body="external_participant_id" type="str">
+  Only interviews that arrived with this ID of yours.
+</ParamField>
+
+<ParamField body="limit" type="int" default="20">
+  Interviews per page.
+</ParamField>
+
+<ParamField body="offset" type="int">
+  Page offset.
+</ParamField>
+
+**Returns** [`TranscriptsBulkOut`](/reference/models#transcriptsbulkout). Use `total_interviews` to paginate.
+
+## search()
+
+```python
+client.transcripts.search(study_id, *, q: str, mode=None, **filters) -> SearchOut
+```
+
+Search participant answers.
+
+<ParamField body="q" type="str" required>
+  The search query.
+</ParamField>
+
+<ParamField body="mode" type="str | SearchMode" default="hybrid">
+  `string` (full-text and fuzzy), `semantic` (embedding similarity) or `hybrid` (rank fusion of both).
+</ParamField>
+
+<ParamField body="question_id" type="str">
+  Restrict to one question: a question ID for linear studies, or the step ID for flow studies.
+</ParamField>
+
+<ParamField body="completed_only" type="bool">
+  Only completed interviews.
+</ParamField>
+
+<ParamField body="include_simulated" type="bool">
+  Include simulated interviews.
+</ParamField>
+
+<ParamField body="include_test_runs" type="bool" default="False">
+  Include test runs.
+</ParamField>
+
+<ParamField body="external_participant_id" type="str">
+  Restrict to one person's interviews, by your ID for them.
+</ParamField>
+
+<ParamField body="strict" type="bool">
+  In hybrid mode, fail with a 503 instead of quietly falling back to string search when semantic search is unavailable.
+</ParamField>
+
+<ParamField body="limit" type="int" default="20">
+  Maximum hits.
+</ParamField>
+
+**Returns** [`SearchOut`](/reference/models#searchout), with `hits` holding a list of [`SearchHit`](/reference/models#searchhit).
+
+```python
+hits = client.transcripts.search(study.id, q="pricing is confusing", mode="semantic")
+for hit in hits.hits:
+    print(f"{hit.score:.2f}  {hit.participant_name}: {hit.content}")
+```

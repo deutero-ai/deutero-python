@@ -1,0 +1,195 @@
+---
+title: "Interview flows"
+description: "Author branching interviews with conditional paths, captured answers, data fetches and signals."
+icon: "diagram-project"
+---
+
+By default a study runs in **linear** mode: it asks its question list in order. An **interview flow** (`client.graph`) replaces that list with a graph of steps, so the interview can branch on answers, capture structured values, pull in outside data and notify your systems as it goes.
+
+## Step types
+
+| Type | What it does | How it attaches |
+|---|---|---|
+| `start` | Entry point. Exactly one per flow. | `edges` |
+| `end` | Exit point. At least one per flow. | `edges` |
+| `question` | Asks something. Its `config` needs at least `qtype` and `text`. | `edges` |
+| `decision` | Chooses the next path: `mode` is `deterministic` (rule-based conditions) or `llm_classifier` (a model picks a class). | `edges` |
+| `extract` | Captures a value from the conversation into a variable. | `after` a question |
+| `context_fetch` | Fetches data from your API for a question to use. | `before` a question |
+| `webhook` | Sends a signal to your endpoint. | `after` a question |
+
+Each type has its own config fields. Get the full schema before you author a flow:
+
+```python
+schema = client.graph.describe_node_types()
+```
+
+## Start from your question list
+
+The easiest way in is to convert the existing linear questions into a straight-line flow, then edit it. Each question captures its answer as `q1`, `q2`, and so on.
+
+```python
+client.graph.import_questions(study.id)  # replaces any existing flow
+graph = client.graph.get(study.id)
+print(graph.graph_version, [node.id for node in graph.flow.nodes])
+```
+
+## Write a whole flow
+
+Flows can be plain dicts in the API's JSON shape, or the typed `FlowDocument`, `FlowNode` and `FlowEdge` models. `from` and `class` are Python keywords, so on the models they're `from_` and `class_`.
+
+<CodeGroup>
+
+```python Typed models
+from deutero import FlowDocument, FlowEdge, FlowNode
+
+flow = FlowDocument(
+    nodes=[
+        FlowNode(id="start", type="start"),
+        FlowNode(id="q_role", type="question",
+                 config={"qtype": "choices", "text": "What's your role?", "options": ["Engineer", "PM"]}),
+        FlowNode(id="branch", type="decision", config={"mode": "deterministic"}),
+        FlowNode(id="q_eng", type="question", config={"qtype": "text", "text": "Which tools slow you down?"}),
+        FlowNode(id="q_pm", type="question", config={"qtype": "text", "text": "How do you prioritise?"}),
+        FlowNode(id="end", type="end"),
+    ],
+    edges=[
+        FlowEdge(from_="start", to="q_role"),
+        FlowEdge(from_="q_role", to="branch"),
+        FlowEdge(from_="branch", to="q_eng", condition={"var": "q_role", "op": "eq", "value": "Engineer"}),
+        FlowEdge(from_="branch", to="q_pm", default=True),
+        FlowEdge(from_="q_eng", to="end"),
+        FlowEdge(from_="q_pm", to="end"),
+    ],
+)
+```
+
+```python Plain dicts
+flow = {
+    "nodes": [
+        {"id": "start", "type": "start"},
+        {"id": "q_role", "type": "question",
+         "config": {"qtype": "choices", "text": "What's your role?", "options": ["Engineer", "PM"]}},
+        {"id": "branch", "type": "decision", "config": {"mode": "deterministic"}},
+        {"id": "q_eng", "type": "question", "config": {"qtype": "text", "text": "Which tools slow you down?"}},
+        {"id": "q_pm", "type": "question", "config": {"qtype": "text", "text": "How do you prioritise?"}},
+        {"id": "end", "type": "end"},
+    ],
+    "edges": [
+        {"from": "start", "to": "q_role"},
+        {"from": "q_role", "to": "branch"},
+        {"from": "branch", "to": "q_eng", "condition": {"var": "q_role", "op": "eq", "value": "Engineer"}},
+        {"from": "branch", "to": "q_pm", "default": True},
+        {"from": "q_eng", "to": "end"},
+        {"from": "q_pm", "to": "end"},
+    ],
+}
+```
+
+</CodeGroup>
+
+<Note>
+  This flow is illustrative: the exact config each step needs, including how a question names the variable it captures, comes from `describe_node_types()`. Run `check()` first and it will tell you anything that's missing.
+</Note>
+
+Check it without saving, then save it:
+
+```python
+report = client.graph.check(study.id, flow=flow)
+for error in report.errors or []:
+    print(error.node_id, error.code, error.message)
+
+if report.valid:
+    client.graph.set(study.id, flow=flow)
+```
+
+### Branching rules
+
+- A `condition` is a single test: `{"var": ..., "op": ..., "value": ...}`. Operators are `eq`, `neq`, `in`, `contains`, `gt`, `gte`, `lt`, `lte`, `is_set` and `not_set`. For compound logic, chain two decision steps.
+- On an `llm_classifier` decision, each outgoing edge sets `class` (`class_` on the model) to the label it handles.
+- A decision with several paths needs exactly one `default` path, unless its conditions cover every possible answer of a choices or scale question.
+- `priority` sets the evaluation order of paths out of the same decision; lowest first.
+- Every step inside a loop needs `max_revisits`. Once a step has run that many times, the interview takes the default path out.
+- `extract`, `webhook` and `context_fetch` steps never appear in `edges`. Attach them with `after` or `before`.
+
+## Edit with patches
+
+`patch` applies targeted edits instead of rewriting the whole flow. Operations run in order and the end state is validated as a whole.
+
+```python
+from deutero import PatchOp
+
+graph = client.graph.get(study.id)
+result = client.graph.patch(
+    study.id,
+    expected_graph_version=graph.graph_version,
+    ops=[
+        PatchOp(op="update_node", id="q1", config={"text": "Walk me through your first week."}),
+        PatchOp(op="remove_edge", from_="q3", to="end"),
+        {"op": "add_edge", "edge": {"from": "q3", "to": "q4"}},
+    ],
+)
+print(result.saved, result.graph_version)
+```
+
+| `op` | Fields |
+|---|---|
+| `add_node` | `node` |
+| `update_node` | `id`, plus `config` (merged: omitted keys are kept, `None` clears one), `max_revisits`, `after`, `before` |
+| `remove_node` | `id` |
+| `add_edge` | `edge` |
+| `update_edge` | `from_`, `to`, plus `condition`, `class_`, `default`, `priority` |
+| `remove_edge` | `from_`, `to` |
+
+## Safe concurrent edits
+
+Every successful save increments `graph_version`. Pass the version you last read as `expected_graph_version` to `set` or `patch`. If someone else has saved in the meantime, the write is refused with `ConflictError` rather than overwriting their change.
+
+```python
+from deutero import ConflictError, ValidationError
+
+try:
+    client.graph.patch(study.id, ops=ops, expected_graph_version=graph.graph_version)
+except ConflictError:
+    graph = client.graph.get(study.id)  # re-read, re-apply, retry
+except ValidationError as e:
+    print(e.body)  # every problem found; nothing was saved
+```
+
+`set` and `patch` never save an invalid flow. An invalid result raises `ValidationError`, and the stored flow is untouched.
+
+## Activate the flow
+
+Saving a flow doesn't change what interviews run. Switch modes explicitly:
+
+```python
+client.graph.activate(study.id)    # interviews follow the flow
+client.graph.deactivate(study.id)  # back to the linear list; the flow is kept
+```
+
+A flow must have compiled cleanly (`has_compiled_ir` on [`graph.get`](/reference/graph#get)) before you can activate it. An open study's flow is locked, so [pause](/guides/study-lifecycle#5-pause-and-edit) it to edit.
+
+## Signals
+
+A `webhook` step sends a signed POST to your endpoint mid-interview. Get each step's signing secret with `get_signals`, then verify deliveries with [`deutero.webhooks.unwrap`](/guides/receiving-webhooks):
+
+```python
+for signal in client.graph.get_signals(study.id).signals or []:
+    print(signal.step_id, signal.url, signal.signing_secret)
+```
+
+Simulated interviews don't deliver signals to real endpoints unless you pass `deliver_signals=True` to [`simulations.run`](/reference/simulations#run).
+
+## Inspect what happened
+
+For any interview, see the variables it captured and the branches it took, plus what its fetches and signals did:
+
+```python
+transcript = client.interviews.get_transcript(interview_id)
+for d in transcript.decisions:
+    print(d.node_id, d.matched_class, "->", d.chosen_node_id, "(default)" if d.used_default else "")
+
+effects = client.interviews.get_fetches_and_signals(interview_id)
+for fetch in effects.fetches or []:
+    print(fetch.node_id, fetch.status_code, fetch.ok)
+```

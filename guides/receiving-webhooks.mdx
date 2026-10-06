@@ -1,0 +1,175 @@
+---
+title: "Receiving webhooks"
+description: "Subscribe to organization events and verify the signed deliveries Deutero sends you."
+icon: "bolt"
+---
+
+Deutero sends signed HTTP POSTs to your endpoint when things happen: an interview starts or completes, a study fills up, credits run out. Deliveries use the [Standard Webhooks](https://www.standardwebhooks.com) scheme.
+
+There are two kinds of delivery, and the same code verifies both:
+
+| Kind | Configured with | Signing secret from |
+|---|---|---|
+| Organization events | [`client.webhooks`](/reference/webhooks) | `webhooks.create` or `webhooks.rotate_secret` |
+| Interview-flow signals | A "Send a signal" step in an [interview flow](/guides/interview-flows#signals) | `graph.get_signals` (one secret per step) |
+
+## Subscribe an endpoint
+
+```python
+created = client.webhooks.create(
+    label="Production receiver",
+    url="https://api.example.com/deutero",
+    events=["interview.completed", "study.full"],  # omit to subscribe to every event
+)
+signing_secret = created.signing_secret
+```
+
+<Warning>
+  `create` and `rotate_secret` are the only calls that return the signing secret. Store it before doing anything else.
+</Warning>
+
+## Verify and parse deliveries
+
+`deutero.webhooks` needs no API key, so it works in a receiver that never calls the API.
+
+```python
+from flask import Flask, request
+
+from deutero import webhooks
+from deutero.webhooks import InterviewCompletedEvent, StudyFullEvent
+
+app = Flask(__name__)
+
+
+@app.post("/deutero")
+def receive():
+    try:
+        # Pass the raw body bytes. Re-serialized JSON will not verify.
+        event = webhooks.unwrap(request.get_data(), request.headers, secret=SIGNING_SECRET)
+    except webhooks.WebhookVerificationError:
+        return "", 400
+
+    if already_processed(event.webhook_id):  # dedupe on the webhook-id header
+        return "", 204
+
+    if isinstance(event, InterviewCompletedEvent) and event.data.completed:
+        reward(event.data.external_participant_id)
+    elif isinstance(event, StudyFullEvent):
+        close_campaign(event.data.survey_id)
+    return "", 204
+```
+
+<Tabs>
+  <Tab title="FastAPI">
+    ```python
+    from fastapi import FastAPI, Request, Response
+
+    from deutero import webhooks
+
+    app = FastAPI()
+
+
+    @app.post("/deutero")
+    async def receive(request: Request) -> Response:
+        body = await request.body()
+        try:
+            event = webhooks.unwrap(body, request.headers, secret=SIGNING_SECRET)
+        except webhooks.WebhookVerificationError:
+            return Response(status_code=400)
+        handle(event)
+        return Response(status_code=204)
+    ```
+  </Tab>
+  <Tab title="Django">
+    ```python
+    from django.http import HttpResponse
+    from django.views.decorators.csrf import csrf_exempt
+    from django.views.decorators.http import require_POST
+
+    from deutero import webhooks
+
+
+    @csrf_exempt
+    @require_POST
+    def receive(request):
+        try:
+            event = webhooks.unwrap(request.body, request.headers, secret=SIGNING_SECRET)
+        except webhooks.WebhookVerificationError:
+            return HttpResponse(status=400)
+        handle(event)
+        return HttpResponse(status=204)
+    ```
+  </Tab>
+</Tabs>
+
+### Good practice
+
+- **Use the raw body.** The signature covers the exact bytes Deutero sent. Parsing and re-serializing the JSON changes them.
+- **Deduplicate.** Deliveries can be retried. `event.webhook_id` (the `webhook-id` header) is unique per message.
+- **Respond quickly** with a 2xx, and do slow work in a background job.
+- **Don't trust participant fields as identity.** `external_participant_id` and `web_source` come from the participant's link. The signature proves the event came from Deutero, not who the participant is.
+
+## Event types
+
+| `type` | Model | `data` fields |
+|---|---|---|
+| `interview.started` | `InterviewStartedEvent` | `interview_id`, `survey_id`, `participant_id`, `external_participant_id`, `web_source` |
+| `interview.completed` | `InterviewCompletedEvent` | the above, plus `completed` |
+| `analysis.completed` | `AnalysisCompletedEvent` | `interview_id`, `survey_id` |
+| `simulation.completed` | `SimulationCompletedEvent` | `interview_id`, `survey_id` |
+| `study.created` | `StudyCreatedEvent` | `study_id`, `survey_id`, `name`, `project_id`, `created_via` |
+| `credits.exhausted` | `CreditsExhaustedEvent` | `organization_id` |
+| `study.full` | `StudyFullEvent` | `survey_id`, `survey_name` |
+
+`survey_id` is the study ID under its older name. `created_via` is `dashboard`, `import` or `api` (which includes MCP clients).
+
+Every event also has `type`, `timestamp`, `webhook_id` and `simulated`. Flow signals and any event type the SDK doesn't know yet come back as a plain `WebhookEvent`, with `data` as a dict. `simulated` is `True` for signals sent from a simulated interview.
+
+Get the live list, with each type's payload fields, from the API:
+
+```python
+for t in client.webhooks.list_event_types().event_types:
+    print(t.event_type, t.data_fields)
+```
+
+## Timestamps and replays
+
+Deliveries whose `webhook-timestamp` is more than 5 minutes old (or in the future) are rejected, which protects against replay attacks. Change the window with `tolerance=` in seconds, or pass `tolerance=None` to verify stored deliveries you're replaying:
+
+```python
+event = webhooks.unwrap(body, headers, secret=SIGNING_SECRET, tolerance=None)
+```
+
+## Test your receiver locally
+
+`webhooks.sign` builds the headers Deutero would send, so you can exercise your endpoint without a real delivery:
+
+```python
+import json
+
+from deutero import webhooks
+
+body = json.dumps({
+    "type": "interview.completed",
+    "timestamp": "2026-10-01T12:00:00Z",
+    "data": {"interview_id": "abc", "survey_id": "def", "completed": True},
+}).encode()
+headers = webhooks.sign(body, secret=SIGNING_SECRET, msg_id="msg_test_1")
+
+response = test_client.post("/deutero", data=body, headers=headers)
+assert response.status_code == 204
+```
+
+## Manage endpoints
+
+```python
+client.webhooks.update(webhook_id, enabled=False)        # pause deliveries
+client.webhooks.update(webhook_id, events=["study.full"]) # replaces the list
+new = client.webhooks.rotate_secret(webhook_id)            # old secret stops verifying immediately
+
+failures = client.webhooks.list_deliveries(webhook_id, success=False, limit=20)
+for d in failures.deliveries:
+    print(d.created_at, d.event_type, d.status_code, d.error_message)
+```
+
+`delete` permanently removes an endpoint, its secret and its delivery log. To stop deliveries temporarily, set `enabled=False` instead.

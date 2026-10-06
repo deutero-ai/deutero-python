@@ -16,3 +16,4 @@ yarn.lock
 augrented-web*
 .idea
 *.json
+!docs.json

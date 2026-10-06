@@ -1,0 +1,126 @@
+---
+title: "client.webhooks"
+sidebarTitle: "Webhooks"
+description: "Manage organization webhook endpoints, signing secrets and the delivery log."
+icon: "webhook"
+---
+
+These methods manage endpoints. To verify the deliveries themselves, see [`deutero.webhooks`](/reference/webhook-verification) and the [Receiving webhooks](/guides/receiving-webhooks) guide.
+
+## list_event_types()
+
+```python
+client.webhooks.list_event_types() -> WebhookEventTypeListOut
+```
+
+Every event type you can subscribe to, with the fields its payload carries, plus the envelope format and signature headers.
+
+**Returns** [`WebhookEventTypeListOut`](/reference/models#webhookeventtypelistout).
+
+## list()
+
+```python
+client.webhooks.list() -> WebhookListOut
+```
+
+Every endpoint in your organization, newest first. Secrets are omitted.
+
+**Returns** [`WebhookListOut`](/reference/models#webhooklistout).
+
+## create()
+
+```python
+client.webhooks.create(*, label: str, url: str, events: list[str] | None = None, enabled: bool | None = None) -> WebhookCreatedOut
+```
+
+Subscribe a URL to organization events.
+
+<Warning>
+  The response carries the signing secret. This is the only time it's shown, so store it before doing anything else.
+</Warning>
+
+<ParamField body="label" type="str" required>
+  How you'll recognize this endpoint in the list.
+</ParamField>
+
+<ParamField body="url" type="str" required>
+  A publicly reachable http(s) URL that receives the POSTs.
+</ParamField>
+
+<ParamField body="events" type="list[str]">
+  Event types to subscribe to. Omitted or empty subscribes to every event.
+</ParamField>
+
+<ParamField body="enabled" type="bool" default="True">
+  Whether deliveries start immediately.
+</ParamField>
+
+**Returns** [`WebhookCreatedOut`](/reference/models#webhookcreatedout), with `webhook` and `signing_secret`.
+
+## update()
+
+```python
+client.webhooks.update(webhook_id, *, label=None, url=None, events=None, enabled=None) -> WebhookOut
+```
+
+Update an endpoint. Only the arguments you pass change; `events` replaces the whole list. Set `enabled=False` to pause deliveries.
+
+**Returns** [`WebhookOut`](/reference/models#webhookout).
+
+## delete()
+
+```python
+client.webhooks.delete(webhook_id) -> WebhookDeleteOut
+```
+
+Permanently delete an endpoint, its secret and its delivery log. To pause deliveries instead, use [`update()`](#update) with `enabled=False`.
+
+**Returns** [`WebhookDeleteOut`](/reference/models#webhookdeleteout).
+
+## rotate_secret()
+
+```python
+client.webhooks.rotate_secret(webhook_id) -> WebhookSecretOut
+```
+
+Mint a new signing secret. **The previous secret stops verifying immediately**, so deploy the new one to your receiver straight away.
+
+**Returns** [`WebhookSecretOut`](/reference/models#webhooksecretout).
+
+## list_deliveries()
+
+```python
+client.webhooks.list_deliveries(
+    webhook_id,
+    *,
+    event_type: str | None = None,
+    success: bool | None = None,
+    external_participant_id: str | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> WebhookDeliveryListOut
+```
+
+An endpoint's delivery log, newest first.
+
+<ParamField body="event_type" type="str">
+  Only deliveries of this event type.
+</ParamField>
+
+<ParamField body="success" type="bool">
+  `True` for only successes, `False` for only failures.
+</ParamField>
+
+<ParamField body="external_participant_id" type="str">
+  Only deliveries about this participant ID of yours.
+</ParamField>
+
+<ParamField body="limit" type="int" default="50">
+  Page size.
+</ParamField>
+
+<ParamField body="offset" type="int">
+  Page offset.
+</ParamField>
+
+**Returns** [`WebhookDeliveryListOut`](/reference/models#webhookdeliverylistout).

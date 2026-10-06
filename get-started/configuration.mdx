@@ -1,0 +1,107 @@
+---
+title: "Configuration"
+description: "Base URL, timeouts, custom HTTP clients and connection lifecycle."
+icon: "sliders"
+---
+
+Both `Deutero` and `AsyncDeutero` accept the same keyword-only options:
+
+```python
+client = Deutero(
+    api_key="dtro_...",
+    base_url="https://dashboard.deutero.ai/study-api",
+    timeout=120.0,
+    http_client=None,
+)
+```
+
+<ParamField body="api_key" type="str">
+  Your API key. Defaults to the `DEUTERO_API_KEY` environment variable.
+</ParamField>
+
+<ParamField body="base_url" type="str" default="https://dashboard.deutero.ai/study-api">
+  The API root. Override it to point at a staging environment.
+</ParamField>
+
+<ParamField body="timeout" type="float" default="120">
+  Request timeout in seconds. Some calls are model calls that take a minute or more (study drafting, question generation, validation), so keep this generous.
+</ParamField>
+
+<ParamField body="http_client" type="httpx.Client | httpx.AsyncClient">
+  A preconfigured `httpx` client. Pass `httpx.Client` to `Deutero` and `httpx.AsyncClient` to `AsyncDeutero`.
+</ParamField>
+
+## Custom base URL
+
+```python
+client = Deutero(base_url="https://staging.example.com/study-api")
+```
+
+## Custom timeout
+
+```python
+client = Deutero(timeout=300.0)  # 5 minutes
+```
+
+A request that exceeds the timeout raises `deutero.TimeoutError`.
+
+## Custom HTTP client
+
+Bring your own `httpx` client for proxies, custom certificates, retries or other transport settings:
+
+```python
+import httpx
+
+from deutero import Deutero
+
+http_client = httpx.Client(
+    proxy="http://proxy.example.com:8080",
+    verify="/path/to/cert.pem",
+    transport=httpx.HTTPTransport(retries=3),
+    timeout=300.0,
+)
+
+client = Deutero(http_client=http_client)
+```
+
+The SDK still adds the `X-API-Key` header to every request, and uses its own `base_url` if your client doesn't set one.
+
+<Note>
+  When you pass `http_client`, its own timeout applies; the SDK's `timeout` argument is not applied to it. The SDK also doesn't close a client you passed in, so close it yourself when you're done.
+</Note>
+
+## Closing connections
+
+The client keeps a connection pool. Use it as a context manager, or call `close()`:
+
+<CodeGroup>
+
+```python Sync
+with Deutero() as client:
+    balance = client.credits.get_balance()
+    print(balance.net_available)
+# connection pool closed here
+```
+
+```python Async
+async with AsyncDeutero() as client:
+    balance = await client.credits.get_balance()
+    print(balance.net_available)
+```
+
+</CodeGroup>
+
+## Health check
+
+`client.health()` calls `GET /health` and returns the raw JSON body. It's handy for a readiness probe.
+
+```python
+print(client.health())
+```
+
+## Conventions
+
+- **IDs** can be passed as `str` or `uuid.UUID`.
+- **Optional arguments left as `None` are not sent.** The server default applies, and on updates the field is left unchanged.
+- **Enums** such as `StudyType`, `ModelTier` and `SearchMode` are `str` enums: pass either the enum member or its string value.
+- **Responses** are Pydantic models from `deutero.models`. Use `.model_dump()` to get a dict.

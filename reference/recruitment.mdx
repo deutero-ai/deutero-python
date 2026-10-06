@@ -1,0 +1,53 @@
+---
+title: "client.recruitment"
+sidebarTitle: "Recruitment"
+description: "Participation links, short-link slugs, response quotas and post-completion redirects."
+icon: "link"
+---
+
+See [Recruitment and embedding](/guides/recruitment-and-embedding) for attribution and embedding.
+
+## get()
+
+```python
+client.recruitment.get(study_id) -> RecruitmentOut
+```
+
+Participation links (text, plus voice and video when enabled, each with a short variant), quota status and whether screening and characteristics are switched on.
+
+Append `&source=<tag>` and/or `&participant_id=<your id>` to a link to attribute arrivals. They're recorded on the interview as `web_source` and `external_participant_id`.
+
+**Returns** [`RecruitmentOut`](/reference/models#recruitmentout).
+
+## update()
+
+```python
+client.recruitment.update(
+    study_id,
+    *,
+    short_url_slug: str | None = None,
+    max_responses: int | None = None,
+    clear_max_responses: bool | None = None,
+    redirect_url: str | None = None,
+) -> RecruitmentOut
+```
+
+Set the short-link slug, response quota or post-completion redirect. Fields you omit are left as they are.
+
+<ParamField body="short_url_slug" type="str">
+  Custom short-link slug: lowercase letters, digits and hyphens, unique across all studies.
+</ParamField>
+
+<ParamField body="max_responses" type="int">
+  Response quota.
+</ParamField>
+
+<ParamField body="clear_max_responses" type="bool">
+  Set to `True` to remove the quota.
+</ParamField>
+
+<ParamField body="redirect_url" type="str">
+  Where participants go after completing. May contain `{{external_participant_id}}`.
+</ParamField>
+
+**Returns** [`RecruitmentOut`](/reference/models#recruitmentout).

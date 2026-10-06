@@ -1,0 +1,133 @@
+---
+title: "client.graph"
+sidebarTitle: "Interview flow"
+description: "Branching interview flows: read, write, patch, check, activate and inspect signals."
+icon: "diagram-project"
+---
+
+An interview flow is the branching alternative to the linear question list. See the [Interview flows](/guides/interview-flows) guide for concepts and a worked example.
+
+Flows and patch operations can be plain dicts in the API's JSON shape, or the typed [`FlowDocument`](/reference/models#flowdocument), [`FlowNode`](/reference/models#flownode), [`FlowEdge`](/reference/models#flowedge) and [`PatchOp`](/reference/models#patchop) models. On the models, `from` and `class` are spelled `from_` and `class_`.
+
+## get()
+
+```python
+client.graph.get(study_id) -> GraphOut
+```
+
+The study's flow, its `graph_version`, whether it's the active script (`is_active`), and whether it last compiled cleanly (`has_compiled_ir`). `flow` is `None` if the study has no flow yet.
+
+**Returns** [`GraphOut`](/reference/models#graphout).
+
+## set()
+
+```python
+client.graph.set(study_id, *, flow, expected_graph_version: int | None = None) -> GraphCheckOut
+```
+
+Replace the whole flow. Nothing is saved unless the flow is valid: on any problem, the call raises `ValidationError` (with every problem in `e.body`) and the stored flow is untouched.
+
+<ParamField body="flow" type="FlowDocument | dict" required>
+  The complete flow.
+</ParamField>
+
+<ParamField body="expected_graph_version" type="int">
+  The `graph_version` you last read. If the flow has been saved since, the write is refused with `ConflictError`. Omit to overwrite unconditionally.
+</ParamField>
+
+**Returns** [`GraphCheckOut`](/reference/models#graphcheckout).
+
+## patch()
+
+```python
+client.graph.patch(study_id, *, ops, expected_graph_version: int | None = None) -> GraphCheckOut
+```
+
+Apply targeted edits to the stored flow. Operations run in order, and the end state is validated as a whole: nothing is saved unless it's valid.
+
+<ParamField body="ops" type="Sequence[PatchOp | dict]" required>
+  The edits, in order.
+
+  ```python
+  {"op": "add_node", "node": {...}}
+  {"op": "update_node", "id": "q_pets", "config": {"text": "New wording?"}}
+  {"op": "remove_node", "id": "q_pets"}
+  {"op": "add_edge", "edge": {"from": "q1", "to": "end"}}
+  {"op": "update_edge", "from": "branch", "to": "q2", "priority": 1}
+  {"op": "remove_edge", "from": "q1", "to": "end"}
+  ```
+
+  `update_node` merges `config`: keys you omit keep their value, and `None` clears one.
+</ParamField>
+
+<ParamField body="expected_graph_version" type="int">
+  Optimistic concurrency, as for [`set()`](#set).
+</ParamField>
+
+**Returns** [`GraphCheckOut`](/reference/models#graphcheckout).
+
+## check()
+
+```python
+client.graph.check(study_id, *, flow=None) -> GraphCheckOut
+```
+
+Validate a flow and report every problem, without changing anything. Omit `flow` to re-check the stored one.
+
+```python
+report = client.graph.check(study.id, flow=draft_flow)
+for error in report.errors or []:
+    print(error.node_id, error.code, error.message)   # e.g. "branch no_default ..."
+```
+
+**Returns** [`GraphCheckOut`](/reference/models#graphcheckout). When valid, `compiled` holds the derived variables table and execution order.
+
+## import_questions()
+
+```python
+client.graph.import_questions(study_id) -> GraphCheckOut
+```
+
+Build and save a straight-line flow from the study's linear questions. **This replaces any existing flow.** Each question captures its answer as `q1`, `q2`, and so on. It doesn't change the interview mode; call [`activate()`](#activate) when ready.
+
+**Returns** [`GraphCheckOut`](/reference/models#graphcheckout).
+
+## activate()
+
+```python
+client.graph.activate(study_id) -> GraphModeOut
+```
+
+Switch the study to `graph` mode, so interviews follow the stored flow. The flow must have compiled cleanly.
+
+**Returns** [`GraphModeOut`](/reference/models#graphmodeout).
+
+## deactivate()
+
+```python
+client.graph.deactivate(study_id) -> GraphModeOut
+```
+
+Switch back to `linear` mode. The stored flow is kept.
+
+**Returns** [`GraphModeOut`](/reference/models#graphmodeout).
+
+## get_signals()
+
+```python
+client.graph.get_signals(study_id) -> FlowSignalsOut
+```
+
+The delivery config of every "Send a signal" (`webhook`) step in the saved flow, including each step's signing secret. Verify the deliveries with [`deutero.webhooks.unwrap()`](/reference/webhook-verification#unwrap).
+
+**Returns** [`FlowSignalsOut`](/reference/models#flowsignalsout).
+
+## describe_node_types()
+
+```python
+client.graph.describe_node_types() -> dict[str, Any]
+```
+
+The configuration schema for every step type. Read this before authoring a flow.
+
+**Returns** the raw JSON schema as a dict.

@@ -1,0 +1,91 @@
+---
+title: "client.embed"
+sidebarTitle: "Embed"
+description: "Publishable keys and install snippets for embedding the interview widget in your site."
+icon: "code"
+---
+
+See [Embed the interview](/guides/recruitment-and-embedding#embed-the-interview) for the end-to-end setup.
+
+## create_key()
+
+```python
+client.embed.create_key(
+    *, allowed_origins: list[str], study_id=None, metadata_max_bytes: int | None = None
+) -> dict[str, Any]
+```
+
+Create a publishable embed key.
+
+<Warning>
+  The response includes `publishable_key` and `signing_secret`. This is the **only** time they're returned, so store them immediately.
+</Warning>
+
+<ParamField body="allowed_origins" type="list[str]" required>
+  Exact origins (scheme, host and port) the widget may load on. The `"*"` wildcard isn't allowed.
+</ParamField>
+
+<ParamField body="study_id" type="str | UUID">
+  Pin the key to one study. Omit to allow any study in your organization.
+</ParamField>
+
+<ParamField body="metadata_max_bytes" type="int">
+  Maximum serialized size of the metadata a widget can carry. At least 256.
+</ParamField>
+
+**Returns** the API's JSON response as a dict.
+
+## list_keys()
+
+```python
+client.embed.list_keys() -> EmbedKeyListOut
+```
+
+Every embed key in your organization. Secrets are omitted.
+
+**Returns** [`EmbedKeyListOut`](/reference/models#embedkeylistout).
+
+## update_key()
+
+```python
+client.embed.update_key(
+    key_id, *, allowed_origins: list[str] | None = None, status: str | None = None, metadata_max_bytes: int | None = None
+) -> dict[str, Any]
+```
+
+Change allowed origins, revoke or reactivate the key, or adjust the metadata size limit.
+
+<ParamField body="allowed_origins" type="list[str]">
+  The replacement list of allowed origins.
+</ParamField>
+
+<ParamField body="status" type="str">
+  `active` or `revoked`.
+</ParamField>
+
+<ParamField body="metadata_max_bytes" type="int">
+  Maximum serialized metadata size. At least 256.
+</ParamField>
+
+**Returns** the API's JSON response as a dict.
+
+## get_snippet()
+
+```python
+client.embed.get_snippet(study_id, *, publishable_key: str | None = None, mode: str | None = None) -> EmbedSnippetOut
+```
+
+Generate the HTML install snippet for a study's interview widget.
+
+<ParamField body="publishable_key" type="str">
+  The key to fill into the snippet. A placeholder is used otherwise.
+</ParamField>
+
+<ParamField body="mode" type="str" default="chat">
+  Widget presentation, set as `data-mode`.
+</ParamField>
+
+**Returns** [`EmbedSnippetOut`](/reference/models#embedsnippetout):
+
+- `snippet` uses the publishable key, with an example `data-metadata` attribute. Page-supplied metadata can be edited by the visitor.
+- `signed_snippet` is for signed-token mode: your server mints a JWS (HS256) token with the key's signing secret, and the token's metadata is recorded as verified. Use it when the interview relies on a metadata value.

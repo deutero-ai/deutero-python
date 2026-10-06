@@ -1,0 +1,74 @@
+---
+title: "client.personas"
+sidebarTitle: "Personas"
+description: "AI participant personas used by simulations."
+icon: "masks-theater"
+---
+
+A persona describes a simulated participant in the third person, as if briefing an actor. See [Simulations](/guides/simulations).
+
+## list()
+
+```python
+client.personas.list(study_id) -> PersonaListOut
+```
+
+Every persona for the study, newest first.
+
+**Returns** [`PersonaListOut`](/reference/models#personalistout).
+
+## create()
+
+```python
+client.personas.create(study_id, *, content: str, source: str | None = None) -> PersonaOut
+```
+
+Write a persona by hand.
+
+<ParamField body="content" type="str" required>
+  Who the participant is (background, situation, attitudes), written as third-person prose.
+</ParamField>
+
+<ParamField body="source" type="str" default="manual">
+  `manual` or `generated`.
+</ParamField>
+
+**Returns** [`PersonaOut`](/reference/models#personaout).
+
+## update()
+
+```python
+client.personas.update(study_id, persona_id, *, content: str) -> PersonaOut
+```
+
+Replace a persona's description. Only affects future simulation runs.
+
+**Returns** [`PersonaOut`](/reference/models#personaout).
+
+## delete()
+
+```python
+client.personas.delete(study_id, persona_id) -> SuccessResponse
+```
+
+Delete a persona. Interviews already simulated with it are kept.
+
+**Returns** [`SuccessResponse`](/reference/models#successresponse).
+
+## generate()
+
+```python
+client.personas.generate(study_id, *, count: int | None = None, save: bool | None = None) -> PersonaGenerateOut
+```
+
+Draft personas with AI from the study's own context.
+
+<ParamField body="count" type="int" default="1">
+  How many to generate, from 1 to 10.
+</ParamField>
+
+<ParamField body="save" type="bool" default="True">
+  Save them to the study. Pass `False` to preview; previewed personas have no IDs.
+</ParamField>
+
+**Returns** [`PersonaGenerateOut`](/reference/models#personagenerateout).

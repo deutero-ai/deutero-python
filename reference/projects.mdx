@@ -1,0 +1,73 @@
+---
+title: "client.projects"
+sidebarTitle: "Projects"
+description: "Create and manage the projects that group your studies."
+icon: "folder"
+---
+
+Projects group studies within your organization.
+
+## list()
+
+```python
+client.projects.list() -> ProjectListOut
+```
+
+List every project in your organization.
+
+**Returns** [`ProjectListOut`](/reference/models#projectlistout), with `projects` holding a list of [`ProjectOut`](/reference/models#projectout).
+
+```python
+for project in client.projects.list().projects:
+    print(project.id, project.name, project.study_count)
+```
+
+## create()
+
+```python
+client.projects.create(*, name: str, description: str | None = None) -> ProjectOut
+```
+
+<ParamField body="name" type="str" required>
+  Project name.
+</ParamField>
+
+<ParamField body="description" type="str">
+  Project description.
+</ParamField>
+
+**Returns** [`ProjectOut`](/reference/models#projectout).
+
+## get()
+
+```python
+client.projects.get(project_id) -> ProjectOut
+```
+
+<ParamField path="project_id" type="str | UUID" required>
+  The project.
+</ParamField>
+
+**Returns** [`ProjectOut`](/reference/models#projectout). Raises `NotFoundError` if it doesn't exist.
+
+## update()
+
+```python
+client.projects.update(project_id, *, name: str | None = None, description: str | None = None) -> ProjectOut
+```
+
+Update a project's name and/or description. Fields you omit are left as they are.
+
+<ParamField path="project_id" type="str | UUID" required>
+  The project.
+</ParamField>
+
+<ParamField body="name" type="str">
+  New name.
+</ParamField>
+
+<ParamField body="description" type="str">
+  New description.
+</ParamField>
+
+**Returns** [`ProjectOut`](/reference/models#projectout).

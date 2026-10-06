@@ -1,0 +1,86 @@
+---
+title: "client.analysis"
+sidebarTitle: "Analysis"
+description: "Analyzable questions, scale and option tallies, and k-means thematic clustering."
+icon: "chart-pie"
+---
+
+See [Analyzing responses](/guides/analyzing-responses) for worked examples.
+
+## list_questions()
+
+```python
+client.analysis.list_questions(study_id, *, category) -> AnalyzableQuestionsOut
+```
+
+The study's questions that are eligible for one kind of analysis.
+
+<ParamField body="category" type="str | AnalysisCategory" required>
+  `text` (free text you can cluster), `scale` or `options`.
+</ParamField>
+
+**Returns** [`AnalyzableQuestionsOut`](/reference/models#analyzablequestionsout). Each question's `id` is what the other methods take as `question_id`.
+
+## get_scale_responses()
+
+```python
+client.analysis.get_scale_responses(study_id, *, question_id: str) -> ScaleResponsesOut
+```
+
+Response counts per scale value, for a scale question.
+
+**Returns** [`ScaleResponsesOut`](/reference/models#scaleresponsesout).
+
+## get_options_responses()
+
+```python
+client.analysis.get_options_responses(study_id, *, question_id: str) -> OptionsResponsesOut
+```
+
+Response counts per option, for a single- or multi-select question.
+
+**Returns** [`OptionsResponsesOut`](/reference/models#optionsresponsesout).
+
+## cluster()
+
+```python
+client.analysis.cluster(
+    study_id, *, question_id: str | None = None, question_number: int | None = None, n_clusters: int | None = None
+) -> ClusteringOut
+```
+
+Group participants' free-text answers to one question into labeled themes using k-means. The result is saved and becomes the study's latest clustering run.
+
+<ParamField body="question_id" type="str">
+  The question to cluster.
+</ParamField>
+
+<ParamField body="question_number" type="int">
+  Alternative to `question_id`, for linear studies.
+</ParamField>
+
+<ParamField body="n_clusters" type="int" default="3">
+  Number of clusters, from 2 to 20. Too few responses for the requested count raises `ValidationError`.
+</ParamField>
+
+**Returns** [`ClusteringOut`](/reference/models#clusteringout).
+
+## get_optimal_clusters()
+
+```python
+client.analysis.get_optimal_clusters(study_id, *, question_id=None, question_number=None) -> OptimalClustersOut
+```
+
+Estimate the best cluster count for a question using the elbow method. Returns `optimal_k`, plus the `k_values` and `inertias` it was chosen from if you want to plot the curve.
+
+**Returns** [`OptimalClustersOut`](/reference/models#optimalclustersout).
+
+## get_latest_clustering()
+
+```python
+client.analysis.get_latest_clustering(study_id) -> ClusteringOut
+```
+
+The study's most recent saved clustering run. `exists` is `False` if there isn't one.
+
+**Returns** [`ClusteringOut`](/reference/models#clusteringout).

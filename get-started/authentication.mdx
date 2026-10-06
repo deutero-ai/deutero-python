@@ -1,0 +1,54 @@
+---
+title: "Authentication"
+description: "Provide your Deutero API key to the client."
+icon: "key"
+---
+
+Every request is authenticated with an organization API key. Create one on the settings page of the [Deutero dashboard](https://dashboard.deutero.ai).
+
+## Pass the key
+
+<Tabs>
+  <Tab title="Environment variable">
+    ```bash
+    export DEUTERO_API_KEY="dtro_..."
+    ```
+
+    ```python
+    from deutero import Deutero
+
+    client = Deutero()  # reads DEUTERO_API_KEY
+    ```
+  </Tab>
+  <Tab title="Constructor argument">
+    ```python
+    from deutero import Deutero
+
+    client = Deutero(api_key="dtro_...")
+    ```
+  </Tab>
+</Tabs>
+
+An explicit `api_key` takes precedence over the environment variable. If neither is set, the constructor raises `ValueError` before any request is made.
+
+The key is sent in the `X-API-Key` header on every request, including when you bring your own [HTTP client](/get-started/configuration#custom-http-client).
+
+<Warning>
+  Treat API keys like passwords. Load them from the environment or a secrets manager rather than committing them to source control.
+</Warning>
+
+## Authentication errors
+
+| Status | Exception | Meaning |
+|---|---|---|
+| 401 | `AuthenticationError` | The key is missing or invalid. |
+| 403 | `PermissionDeniedError` | The key is valid but not allowed to do this, for example because of a plan limit. |
+
+`PermissionDeniedError` subclasses `AuthenticationError`, so catch it first if you want to handle the two differently. See [Error handling](/guides/error-handling).
+
+## Keys that never reach the API
+
+Two kinds of secret are separate from your API key:
+
+- **Webhook signing secrets** (`whsec_...`) verify deliveries Deutero sends you. Verification runs locally and needs no API key. See [Receiving webhooks](/guides/receiving-webhooks).
+- **Embed publishable keys** let a website load the interview widget. See [Recruitment and embedding](/guides/recruitment-and-embedding#embed-the-interview).

@@ -1,0 +1,206 @@
+---
+title: "Study lifecycle"
+description: "Draft, configure, validate, publish and pause a study."
+icon: "arrows-spin"
+---
+
+A study moves through four statuses:
+
+| Status | Participants admitted | Interview configuration |
+|---|---|---|
+| `draft` | No | Editable |
+| `open` | Yes | Locked |
+| `paused` | No | Editable |
+| `closed` | No | — |
+
+New studies start as `draft`. [`studies.publish`](/reference/studies#publish) opens a study, and [`studies.pause`](/reference/studies#pause) stops admitting participants and unlocks editing.
+
+## 1. Create the study
+
+Create it directly with the fields you already have:
+
+```python
+study = client.studies.create(
+    project_id=project.id,
+    name="Why new users drop off",
+    survey_type="user_experience",
+    research_question="Where does onboarding lose people?",
+    target_population="Product managers at 50-500 person companies",
+    language="English",
+    model_tier="standard",
+)
+```
+
+`survey_type` is one of `sociology` (the default), `user_experience`, `customer_development` or `polling`. `model_tier` is one of `open_weights` (the default), `standard` or `premium`.
+
+### Or draft it with AI
+
+[`studies.draft`](/reference/studies#draft) turns a short brief into study fields, and [`studies.draft_from_site`](/reference/studies#draft_from_site) does the same from a product landing page. Neither stores anything, so review the draft and pass its fields to `create`:
+
+<CodeGroup>
+
+```python From a brief
+draft = client.studies.draft(
+    survey_type="customer_development",
+    problem_hypothesis="Small agencies lose hours every week reconciling invoices",
+    customer_segment="Owners of 5-20 person design agencies",
+)
+study = client.studies.create(project_id=project.id, **draft.model_dump(exclude_none=True))
+```
+
+```python From a landing page
+result = client.studies.draft_from_site(url="https://example.com")
+if result.is_valid:
+    study = client.studies.create(project_id=project.id, **result.draft.model_dump(exclude_none=True))
+else:
+    print("Couldn't draft:", result.rationale)
+```
+
+</CodeGroup>
+
+Each `survey_type` reads a different set of brief fields. See [`draft`](/reference/studies#draft) for which are required.
+
+<Note>
+  Drafting is a model call that usually takes 20–40 seconds. Keep the client [timeout](/get-started/configuration#custom-timeout) at its 120-second default or higher.
+</Note>
+
+## 2. Configure what participants see
+
+Participants go through these stages in order. Each is optional except the questions.
+
+<Steps>
+  <Step title="Welcome and consent">
+    ```python
+    client.welcome.set(study.id, message="Thanks for joining! This takes about 10 minutes.", consent=True)
+    ```
+
+    Or draft it from the study's own fields with `client.welcome.generate(study.id)`. Fill in any `placeholders` the draft lists, then save it with `set`. Add translations with [`upsert_translation`](/reference/welcome#upsert_translation).
+  </Step>
+
+  <Step title="Screening">
+    Qualifying multiple-choice questions. Participants whose answers aren't in `acceptable_options` are disqualified.
+
+    ```python
+    client.screening.create_question(
+        study.id,
+        question="Do you use the product at work?",
+        options=["Yes", "No"],
+        acceptable_options=["Yes"],
+    )
+    client.screening.set_settings(study.id, enabled=True, disqualification_message="Thanks anyway!")
+    ```
+  </Step>
+
+  <Step title="Characteristics">
+    Participant attributes you'll segment by later.
+
+    ```python
+    client.characteristics.create_question(
+        study.id,
+        question="What is your role?",
+        variable="role",
+        options=["Engineer", "PM", "Designer"],
+    )
+    client.characteristics.set_settings(study.id, enabled=True)
+    ```
+  </Step>
+
+  <Step title="Interview questions">
+    Write them, generate them, or both. Generated questions are appended, never replacing what's there.
+
+    ```python
+    client.questions.create(study.id, question="Walk me through your first week.", max_turns=6)
+    client.questions.generate(study.id, n_questions=8, additional_instructions="Start with two warm-up questions")
+    ```
+
+    For branching interviews, author a flow instead. See [Interview flows](/guides/interview-flows).
+  </Step>
+</Steps>
+
+### Question types
+
+If you omit `qtype`, it's inferred from the config you pass:
+
+| You pass | Inferred type |
+|---|---|
+| `scale` | `scale` |
+| `options` | `choices` |
+| `slots` | `slots` |
+| `expected_image` | `image_upload` |
+| none of the above | `text` |
+
+Set `qtype` explicitly for `multi_select`, `ranking` and `card_sort` (which uses `groups`). `image_upload` needs the `standard` or `premium` model tier.
+
+```python
+client.questions.create(
+    study.id,
+    question="Which features do you use weekly?",
+    qtype="multi_select",
+    options=["Reports", "Alerts", "Integrations", "API"],
+    min_select=1,
+    max_select=3,
+)
+```
+
+## 3. Validate
+
+[`studies.validate`](/reference/studies#validate) checks everything participants will read (questions or flow, welcome, screening and characteristics) and records the result. Each issue has a `severity`:
+
+- **Ethical** and **blocking** issues must be fixed before publishing.
+- **Methodological** issues can be acknowledged.
+
+```python
+run = client.studies.validate(study.id)
+print(run.outcome)
+for issue in run.issues:
+    print(issue.severity, issue.code, issue.message, issue.location.kind)
+```
+
+For a quicker, questions-only check (ethics, language quality and redundancy), use [`questions.validate`](/reference/questions#validate).
+
+## 4. Publish
+
+`publish` checks your plan's open-study limit, your credits and the latest validation. If anything blocks it, it raises `ConflictError`, with the refusal code, the issues and the `validation_run_id` in `e.body`.
+
+```python
+from deutero import ConflictError
+
+try:
+    client.studies.publish(study.id)
+except ConflictError as e:
+    print(e.body)
+    # Publish anyway if only methodological issues remain
+    client.studies.publish(study.id, acknowledge_validation_run_id=e.body["validation_run_id"])
+```
+
+If your balance covers at least one interview but not every remaining response, pass `acknowledge_credit_shortfall=True` to publish anyway.
+
+Check where a study stands at any time with [`get_publication`](/reference/studies#get_publication):
+
+```python
+pub = client.studies.get_publication(study.id)
+print(pub.status, f"{pub.open_count}/{pub.open_limit} open", pub.credit_check.covers_remaining)
+```
+
+## 5. Pause and edit
+
+An open study's interview configuration is locked. Pause it to make changes, then publish again to reopen:
+
+```python
+paused = client.studies.pause(study.id)
+print(paused.in_flight_count, "interviews still finishing on the old configuration")
+
+client.questions.update(study.id, question_id, question="Walk me through your first day.")
+client.studies.publish(study.id)
+```
+
+## 6. Monitor
+
+```python
+stats = client.studies.get_stats(study.id)
+print(f"{stats.completed_interviews} of {stats.total_interviews} completed ({stats.completion_rate:.0%})")
+if stats.max_responses:
+    print(f"Quota {stats.quota_fill_rate:.0%} full, {stats.quota_remaining} remaining")
+```
+
+`stats` counts simulated interviews and test runs separately, in `simulated_interviews` and `test_interviews`.

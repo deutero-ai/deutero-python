@@ -1,0 +1,108 @@
+---
+title: "client.screening"
+sidebarTitle: "Screening"
+description: "Qualifying multiple-choice questions that gate who can take part."
+icon: "filter"
+---
+
+Screening runs before the interview. Each question lists the `acceptable_options` that qualify a participant. Participants who don't qualify see the disqualification message and can be redirected.
+
+```python
+client.screening.create_question(
+    study.id,
+    question="Do you use the product at work?",
+    options=["Yes", "No"],
+    acceptable_options=["Yes"],
+)
+client.screening.set_settings(study.id, enabled=True, disqualification_message="Thanks anyway!")
+```
+
+## get()
+
+```python
+client.screening.get(study_id) -> ScreeningOut
+```
+
+Screening settings plus the ordered question list.
+
+**Returns** [`ScreeningOut`](/reference/models#screeningout).
+
+## set_settings()
+
+```python
+client.screening.set_settings(
+    study_id, *, enabled: bool, disqualification_message: str | None = None, redirect_url: str | None = None
+) -> ScreeningSettingsOut
+```
+
+Enable or disable screening. Disabling keeps the questions and settings.
+
+<ParamField body="enabled" type="bool" required>
+  Whether screening runs before the interview.
+</ParamField>
+
+<ParamField body="disqualification_message" type="str">
+  Shown to participants who don't qualify.
+</ParamField>
+
+<ParamField body="redirect_url" type="str">
+  Where disqualified participants are sent. May contain `{{external_participant_id}}`.
+</ParamField>
+
+**Returns** [`ScreeningSettingsOut`](/reference/models#screeningsettingsout).
+
+## create_question()
+
+```python
+client.screening.create_question(
+    study_id, *, question: str, options: list[str], acceptable_options: list[str]
+) -> ScreeningQuestionOut
+```
+
+Append a multiple-choice qualifying question.
+
+<ParamField body="question" type="str" required>
+  Question text.
+</ParamField>
+
+<ParamField body="options" type="list[str]" required>
+  Answer options.
+</ParamField>
+
+<ParamField body="acceptable_options" type="list[str]" required>
+  The subset of `options` that qualify the participant.
+</ParamField>
+
+**Returns** [`ScreeningQuestionOut`](/reference/models#screeningquestionout).
+
+## update_question()
+
+```python
+client.screening.update_question(
+    study_id, question_id, *, question=None, options=None, acceptable_options=None
+) -> ScreeningQuestionOut
+```
+
+Update a screening question. Only the arguments you pass change.
+
+**Returns** [`ScreeningQuestionOut`](/reference/models#screeningquestionout).
+
+## delete_question()
+
+```python
+client.screening.delete_question(study_id, question_id) -> SuccessResponse
+```
+
+Delete a screening question and any recorded answers to it.
+
+**Returns** [`SuccessResponse`](/reference/models#successresponse).
+
+## reorder_questions()
+
+```python
+client.screening.reorder_questions(study_id, *, question_ids: Sequence[str | UUID]) -> ScreeningOut
+```
+
+Reorder screening questions. Pass every screening question ID, in the order you want.
+
+**Returns** [`ScreeningOut`](/reference/models#screeningout).

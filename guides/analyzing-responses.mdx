@@ -1,0 +1,129 @@
+---
+title: "Analyzing responses"
+description: "Export transcripts, search what participants said, tally structured answers and cluster free text into themes."
+icon: "chart-scatter"
+---
+
+## Interviews
+
+List a study's interviews, newest first, with filters:
+
+```python
+page = client.interviews.list(
+    study.id,
+    completed=True,
+    started_after="2026-09-01T00:00:00Z",
+    limit=50,
+    offset=0,
+)
+print(page.total)
+for i in page.interviews:
+    print(i.id, i.participant_name, i.start_time, i.termination_reason)
+```
+
+`started_after` and `started_before` accept a `datetime` or an ISO 8601 string.
+
+Get one interview in full detail, including screening answers, characteristics, embed metadata and captured flow variables:
+
+```python
+detail = client.interviews.get(interview_id)
+for c in detail.characteristics:
+    print(c.variable, "=", c.value)
+```
+
+### Test runs and simulations
+
+Your own interviews through the dashboard's **Try Interview** or **Preview** are *test runs*. Test runs and simulations are left out of lists, transcripts and search unless you ask for them:
+
+| Call | Include simulations | Include test runs |
+|---|---|---|
+| `interviews.list` | `simulated=True` (only simulated) | `test_runs=True` (only test runs) |
+| `interviews.find_by_external_id` | `include_simulated=True` | `include_test_runs=True` |
+| `transcripts.list` / `transcripts.search` | `include_simulated=True` | `include_test_runs=True` |
+
+On `interviews.list`, `False` explicitly excludes and `True` returns *only* that kind. Every result carries `simulated` and `test_run` flags.
+
+## Transcripts
+
+Fetch one interview's messages, in order:
+
+```python
+t = client.interviews.get_transcript(interview_id)
+for m in t.messages:
+    print(m.question_number, m.type, m.content)
+```
+
+Or export a study's transcripts in bulk, a page of interviews at a time:
+
+```python
+offset = 0
+while True:
+    page = client.transcripts.list(study.id, completed=True, limit=20, offset=offset)
+    for t in page.transcripts:
+        save(t.model_dump())
+    offset += page.limit
+    if offset >= page.total_interviews:
+        break
+```
+
+## Search
+
+Search across every participant answer in a study:
+
+```python
+hits = client.transcripts.search(study.id, q="pricing is confusing", mode="semantic", limit=10)
+for hit in hits.hits:
+    print(f"{hit.score:.2f}  {hit.participant_name}: {hit.content}")
+```
+
+| `mode` | How it matches |
+|---|---|
+| `string` | Full-text and fuzzy matching |
+| `semantic` | Embedding similarity; `score` is cosine similarity (0–1) |
+| `hybrid` (default) | Rank fusion of both |
+
+Narrow it with `question_id` (a question ID, or a step ID for flow studies), `completed_only` or `external_participant_id`. In hybrid mode, if semantic search is unavailable the API quietly falls back to string search; pass `strict=True` to get an error instead.
+
+## Scale and choice questions
+
+List the questions eligible for each kind of analysis, then tally them:
+
+```python
+for q in client.analysis.list_questions(study.id, category="scale").questions:
+    tally = client.analysis.get_scale_responses(study.id, question_id=q.id)
+    print(q.question, tally.counts)          # {"1": 3, "2": 5, ...}
+
+for q in client.analysis.list_questions(study.id, category="options").questions:
+    tally = client.analysis.get_options_responses(study.id, question_id=q.id)
+    for row in tally.counts:
+        print(q.question, row.option, row.count)
+```
+
+## Thematic clustering
+
+Group free-text answers to a question into labeled themes with k-means. Let the elbow method pick the cluster count, or set it yourself (2–20):
+
+```python
+q = client.analysis.list_questions(study.id, category="text").questions[0]
+
+k = client.analysis.get_optimal_clusters(study.id, question_id=q.id).optimal_k
+result = client.analysis.cluster(study.id, question_id=q.id, n_clusters=k)
+
+for cluster in result.data_points:
+    print(f"{cluster.name} ({len(cluster.text)} answers)")
+    print("  ", cluster.analysis)
+```
+
+Each cluster has a `name`, the answer `text` list, optional `participant_names`, 2D coordinates (`x`, `y`) for plotting, and an `analysis` summary. `centroids` gives each cluster's center.
+
+The run is saved. Fetch the most recent one later with `get_latest_clustering`, which returns `exists=False` if the study has never been clustered:
+
+```python
+latest = client.analysis.get_latest_clustering(study.id)
+if latest.exists:
+    print(latest.question_id, latest.n_clusters, latest.timestamp)
+```
+
+<Note>
+  Clustering needs enough responses for the requested number of clusters. Too few raises `ValidationError`.
+</Note>
