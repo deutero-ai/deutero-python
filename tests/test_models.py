@@ -2,102 +2,80 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from uuid import UUID
 
+import pytest
+from pydantic import BaseModel
+
+import deutero.models
+from deutero._http import compact
 from deutero.models import (
-    AnalysisPhase,
-    CreditBalance,
-    InterviewAnalysisStatus,
+    AnalysisCategory,
+    ClusteringOut,
+    CreditBalanceOut,
+    FlowDocument,
+    FlowEdge,
+    FlowNode,
     ModelTier,
-    ParticipationStats,
-    Persona,
-    PhaseStatus,
-    Question,
-    StudyGenerateResponse,
+    PatchOp,
+    ScaleConfig,
+    SearchMode,
+    StudyOut,
     StudyType,
+    TranscriptOut,
 )
+
+STUDY_ID = "12345678-1234-1234-1234-123456789abc"
 
 
 class TestEnums:
     def test_study_type_values(self) -> None:
-        assert StudyType.USER_EXPERIENCE == "user_experience"
         assert StudyType.SOCIOLOGY == "sociology"
+        assert StudyType.USER_EXPERIENCE == "user_experience"
         assert StudyType.CUSTOMER_DEVELOPMENT == "customer_development"
         assert StudyType.POLLING == "polling"
 
     def test_model_tier_values(self) -> None:
         assert ModelTier.OPEN_WEIGHTS == "open_weights"
+        assert ModelTier.STANDARD == "standard"
         assert ModelTier.PREMIUM == "premium"
-        assert ModelTier.FRONTIER == "frontier"
 
-    def test_analysis_phase_values(self) -> None:
-        assert AnalysisPhase.INITIAL_ENGAGEMENT == "initial_engagement"
-        assert AnalysisPhase.EMERGENT_THEMES == "emergent_themes"
-
-
-class TestStudyGenerateResponse:
-    def test_parse_minimal(self) -> None:
-        data = {
-            "study_id": "12345678-1234-1234-1234-123456789abc",
-        }
-        resp = StudyGenerateResponse.model_validate(data)
-        assert resp.study_id == UUID("12345678-1234-1234-1234-123456789abc")
-        assert resp.study_name == ""
-        assert resp.research_questions == []
-
-    def test_parse_full(self) -> None:
-        data = {
-            "study_id": "12345678-1234-1234-1234-123456789abc",
-            "study_name": "UX Study: Onboarding",
-            "study_description": "A study about onboarding.",
-            "research_questions": [{"id": "1", "question": "How?"}],
-            "research_objectives": [{"id": "1", "objective": "Understand pain"}],
-            "xml_file": "<xml/>",
-            "url": "https://example.com",
-        }
-        resp = StudyGenerateResponse.model_validate(data)
-        assert resp.study_name == "UX Study: Onboarding"
-        assert len(resp.research_questions) == 1
+    def test_search_and_analysis_values(self) -> None:
+        assert SearchMode.HYBRID == "hybrid"
+        assert AnalysisCategory.OPTIONS == "options"
 
 
-class TestParticipationStats:
+class TestStudyOut:
+    def test_parse_minimal_applies_defaults(self) -> None:
+        study = StudyOut.model_validate({
+            "id": STUDY_ID,
+            "project_id": None,
+            "name": "Onboarding",
+            "dashboard_url": "https://dashboard.deutero.ai/x",
+            "participation_url": "https://app.deutero.ai/chat?survey_id=x",
+        })
+        assert study.id == UUID(STUDY_ID)
+        assert study.interview_mode == "linear"
+        assert study.question_count == 0
+        assert study.short_participation_url is None
+
+    def test_ignores_unknown_fields(self) -> None:
+        study = StudyOut.model_validate({
+            "id": STUDY_ID,
+            "project_id": STUDY_ID,
+            "name": "Onboarding",
+            "dashboard_url": "d",
+            "participation_url": "p",
+            "some_future_field": 1,
+        })
+        assert study.name == "Onboarding"
+
+
+class TestCreditBalanceOut:
     def test_parse(self) -> None:
-        data = {
-            "survey_id": "12345678-1234-1234-1234-123456789abc",
-            "total_interviews": 10,
-            "completed_interviews": 7,
-            "incomplete_interviews": 3,
-            "completion_rate": 70.0,
-            "max_responses": 20,
-            "quota_fill_rate": 35.0,
-            "quota_remaining": 13,
-        }
-        stats = ParticipationStats.model_validate(data)
-        assert stats.total_interviews == 10
-        assert stats.quota_remaining == 13
-
-
-class TestQuestion:
-    def test_parse(self) -> None:
-        data = {
-            "id": "abc-123",
-            "question": "How satisfied are you?",
-            "scale": {"minScale": 1, "maxScale": 5, "minLabel": "Low", "maxLabel": "High"},
-        }
-        q = Question.model_validate(data)
-        assert q.question == "How satisfied are you?"
-        assert q.scale["maxScale"] == 5
-
-
-class TestPersona:
-    def test_parse(self) -> None:
-        p = Persona.model_validate({"persona": "A busy developer", "persona_id": "p1"})
-        assert p.persona_id == "p1"
-
-
-class TestCreditBalance:
-    def test_parse(self) -> None:
-        data = {
+        balance = CreditBalanceOut.model_validate({
             "available_credits": 100.0,
             "credits_used": 20.0,
             "credits_reserved": 5.0,
@@ -107,27 +85,69 @@ class TestCreditBalance:
             "is_trial_active": False,
             "trial_credits_used": 0,
             "net_available": 75.0,
-        }
-        balance = CreditBalance.model_validate(data)
+        })
         assert balance.net_available == 75.0
 
 
-class TestInterviewAnalysisStatus:
-    def test_parse(self) -> None:
-        data = {
-            "interview_id": "int-1",
-            "study_id": "study-1",
-            "status": "in_progress",
-            "phases_completed": 2,
-            "total_phases": 4,
-            "phases": [
-                {"phase": 1, "completed": True, "completed_at": "2025-01-01T00:00:00", "has_output": True},
-                {"phase": 2, "completed": True, "completed_at": "2025-01-01T01:00:00", "has_output": True},
-                {"phase": 3, "completed": False, "has_output": False},
-                {"phase": 4, "completed": False, "has_output": False},
+class TestTranscriptOut:
+    def test_parse_nested(self) -> None:
+        transcript = TranscriptOut.model_validate({
+            "interview_id": STUDY_ID,
+            "messages": [{"id": STUDY_ID, "type": "question", "content": "Hi?"}],
+            "variables": [{"name": "q1", "value": ["a", "b"], "value_type": "list[string]"}],
+            "decisions": [{"node_id": "branch", "matched_class": "yes", "chosen_node_id": "q2"}],
+        })
+        assert transcript.messages[0].content == "Hi?"
+        assert transcript.variables[0].value == ["a", "b"]
+        assert transcript.decisions[0].used_default is False
+
+
+class TestClusteringOut:
+    def test_defaults_when_no_run(self) -> None:
+        result = ClusteringOut.model_validate({"exists": False})
+        assert result.exists is False
+        assert result.data_points == []
+
+
+class TestFlowModels:
+    def test_edge_uses_from_alias(self) -> None:
+        edge = FlowEdge.model_validate({"from": "start", "to": "q1", "class": "yes"})
+        assert edge.from_ == "start"
+        assert edge.class_ == "yes"
+        assert FlowEdge(from_="a", to="b").from_ == "a"
+
+    def test_flow_serializes_with_api_field_names(self) -> None:
+        flow = FlowDocument(
+            nodes=[
+                FlowNode(id="start", type="start"),
+                FlowNode(id="q1", type="question", config={"qtype": "text", "text": "Hi?"}),
+                FlowNode(id="end", type="end"),
             ],
-        }
-        status = InterviewAnalysisStatus.model_validate(data)
-        assert status.phases_completed == 2
-        assert len(status.phases) == 4
-        assert status.phases[0].completed is True
+            edges=[FlowEdge(from_="start", to="q1"), FlowEdge(from_="q1", to="end")],
+        )
+        body = compact(flow=flow)
+        assert body["flow"]["edges"][0] == {"from": "start", "to": "q1", "default": False, "priority": 0}
+        assert body["flow"]["nodes"][0] == {"id": "start", "type": "start"}
+
+    def test_patch_op_keeps_nulls_inside_config(self) -> None:
+        op = PatchOp(op="update_node", id="q1", config={"text": "New?", "hint": None})
+        assert compact(ops=[op])["ops"] == [{"op": "update_node", "id": "q1", "config": {"text": "New?", "hint": None}}]
+
+    def test_scale_config_defaults(self) -> None:
+        scale = ScaleConfig()
+        assert (scale.minScale, scale.maxScale) == (1, 10)
+
+
+SCHEMAS = json.loads((Path(__file__).parent / "fixtures" / "openapi.json").read_text())["components"]["schemas"]
+SHARED = sorted(
+    name
+    for name, obj in vars(deutero.models).items()
+    if isinstance(obj, type) and issubclass(obj, BaseModel) and "properties" in SCHEMAS.get(name, {})
+)
+
+
+@pytest.mark.parametrize("name", SHARED)
+def test_model_fields_match_spec(name: str) -> None:
+    model = getattr(deutero.models, name)
+    fields = {f.alias or key for key, f in model.model_fields.items()}
+    assert fields == set(SCHEMAS[name]["properties"])

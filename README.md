@@ -1,8 +1,8 @@
 # Deutero Python SDK
 
-Official Python bindings for the [Deutero](https://deutero.ai) research platform API.
+Official Python bindings for the [Deutero](https://deutero.ai) Study Management API.
 
-Design, run, and analyse qualitative research studies — interviews, simulations, and thematic analysis — all from Python.
+Run the full study lifecycle from Python: create and configure studies, gate them with screening and consent, author linear or branching interview flows, recruit and embed, rehearse with AI personas, then monitor, search and cluster the responses.
 
 [![PyPI version](https://img.shields.io/pypi/v/deutero.svg)](https://pypi.org/project/deutero/)
 [![Python](https://img.shields.io/pypi/pyversions/deutero.svg)](https://pypi.org/project/deutero/)
@@ -31,52 +31,46 @@ from deutero import Deutero
 
 client = Deutero(api_key="your-api-key")
 
-# 1. Generate a research study
-study = client.studies.generate(
-    study_type="user_experience",
-    business_context="Our SaaS platform helps remote teams collaborate on documents",
-    research_need="Understand why new users drop off during onboarding",
-    target_users="Product managers at companies with 50-500 employees",
-)
-print(f"Created study: {study.study_name} (ID: {study.study_id})")
-
-# 2. Generate interview questions
-questions = client.questions.generate(
-    study_id=study.study_id,
-    number_of_questions=8,
-)
-print(f"Generated {len(questions.question_list)} questions")
-
-# 3. Generate synthetic personas
-personas = client.personas.generate(
-    study_id=study.study_id,
-    number_of_personas=5,
+# 1. Create a project and a study
+project = client.projects.create(name="Onboarding research")
+study = client.studies.create(
+    project_id=project.id,
+    name="Why new users drop off",
+    survey_type="user_experience",
+    research_question="Where does onboarding lose people?",
+    target_population="Product managers at 50-500 person companies",
 )
 
-# 4. Simulate interviews
-for persona in personas.personas:
-    sim = client.interviews.simulate(
-        study_id=study.study_id,
-        persona_id=persona.persona_id,
-    )
-    print(f"Simulated interview: {sim.transcript_url}")
-
-# 5. Run thematic analysis
-result = client.analysis.run(
-    study_id=study.study_id,
-    model_tier="premium",
+# 2. Welcome message, then the interview questions
+client.welcome.set(study.id, message="Thanks for joining! This takes about 10 minutes.", consent=True)
+client.questions.create(study.id, question="Walk me through your first day with the product.", max_turns=6)
+client.questions.create(
+    study.id,
+    question="How easy was setup?",
+    qtype="scale",
+    scale={"minScale": 1, "maxScale": 5, "minLabel": "Very hard", "maxLabel": "Very easy"},
 )
-print(f"Queued analysis for {result.interviews_queued} interviews")
+report = client.questions.validate(study.id)
+print("Ethics check passed:", report.ethics_check.passed)
 
-# 6. Check analysis progress
-status = client.analysis.get_status(study_id=study.study_id)
-for interview in status.interviews:
-    print(f"  {interview.interview_id}: {interview.status} ({interview.phases_completed}/4 phases)")
+# 3. Rehearse with an AI participant before recruiting
+personas = client.personas.generate(study.id, count=1)
+run = client.simulations.run(study.id, persona_id=personas.personas[0].id)
+print("Simulation started:", run.id, run.status)
+
+# 4. Publish (studies start as drafts), then share the participation link
+client.studies.publish(study.id)
+recruitment = client.recruitment.get(study.id)
+print("Share this link:", recruitment.participation_url)
+
+# 5. Monitor responses
+stats = client.studies.get_stats(study.id)
+print(f"{stats.completed_interviews}/{stats.total_interviews} completed")
 ```
 
 ## Authentication
 
-Get your API key from the [Deutero dashboard](https://app.deutero.ai). You can provide it in two ways:
+Get your API key from the dashboard settings page. You can provide it in two ways:
 
 **Option 1 — Constructor argument:**
 
@@ -94,9 +88,11 @@ export DEUTERO_API_KEY="dtro_..."
 client = Deutero()  # reads from DEUTERO_API_KEY
 ```
 
+The key is sent in the `X-API-Key` header.
+
 ## Async support
 
-Every method is available in an async variant via `AsyncDeutero`:
+Every method is available in an async variant via `AsyncDeutero`, with identical signatures:
 
 ```python
 import asyncio
@@ -104,209 +100,327 @@ from deutero import AsyncDeutero
 
 async def main():
     async with AsyncDeutero(api_key="your-api-key") as client:
-        study = await client.studies.generate(
-            study_type="sociology",
-            research_question="How do remote workers maintain social connections?",
-            population_of_interest="Full-time remote workers in tech companies",
-        )
-        print(study.study_name)
+        projects = await client.projects.list()
+        for project in projects.projects:
+            print(project.name, project.study_count)
 
 asyncio.run(main())
 ```
 
 ## API Reference
 
+All IDs accept either a `str` or a `uuid.UUID`. Optional arguments left as `None` are not sent, so the server default applies (and, for updates, the field is left unchanged). Responses are typed Pydantic models from `deutero.models`.
+
+### `client.projects`
+
+| Method | Endpoint |
+|--------|----------|
+| `list()` | `GET /projects` |
+| `create(name=, description=)` | `POST /projects` |
+| `get(project_id)` | `GET /projects/{id}` |
+| `update(project_id, name=, description=)` | `PATCH /projects/{id}` |
+
 ### `client.studies`
 
-| Method | Description |
-|--------|-------------|
-| `generate(...)` | Create a new research study (UX, sociology, customer dev, polling) |
-| `get_participation(study_id)` | Get interview completion & quota statistics |
-| `get_agent_requirements(study_id)` | Get/generate agent requirements markdown |
-| `get_model_tier(study_id)` | Get current model tier configuration |
-| `set_model_tier(study_id, model_tier=)` | Change the model tier |
+| Method | Endpoint |
+|--------|----------|
+| `create(project_id=, name=, ...)` | `POST /studies` |
+| `list(project_id)` | `GET /projects/{id}/studies` |
+| `get(study_id)` | `GET /studies/{id}` |
+| `update(study_id, ...)` | `PATCH /studies/{id}` |
+| `get_stats(study_id)` | `GET /studies/{id}/stats` |
+| `draft(survey_type=, language=, ...brief fields)` | `POST /study-drafts` |
+| `draft_from_site(url=, language=)` | `POST /study-drafts/from-site` |
+| `get_publication(study_id)` | `GET /studies/{id}/publication` |
+| `validate(study_id)` | `POST /studies/{id}/validate` |
+| `publish(study_id, acknowledge_validation_run_id=, acknowledge_credit_shortfall=)` | `POST /studies/{id}/publish` |
+| `pause(study_id)` | `POST /studies/{id}/pause` |
 
-#### Study types and their required fields
+`survey_type` is one of `sociology`, `user_experience`, `customer_development`, `polling` (see `StudyType`). `model_tier` is one of `open_weights`, `standard`, `premium` (see `ModelTier`; `frontier` is accepted as a deprecated alias for `premium`).
 
-**User Experience** (`study_type="user_experience"`):
-- `business_context` (required) — Overview of the business or product
-- `research_need` (required) — Why the research is being conducted
-- `target_users` — Primary audience
-- `constraints` — Timing or other considerations
+**Drafting with AI.** `draft()` turns a short research brief into study fields and `draft_from_site()` does the same from a product landing page. Neither stores anything: pass the draft's fields to `create()`, then fill in the questions with `client.questions.generate()`.
 
-**Sociology** (`study_type="sociology"`):
-- `research_question` (required) — The research question
-- `population_of_interest` (required) — Population being studied
-- `context_or_setting` — Where the phenomenon occurs
-- `key_concepts` — Main concepts being examined
-- `scope_and_boundaries` — What's included/excluded
+```python
+draft = client.studies.draft(
+    survey_type="customer_development",
+    problem_hypothesis="Small agencies lose hours every week reconciling invoices",
+    customer_segment="Owners of 5-20 person design agencies",
+)
+study = client.studies.create(project_id=project.id, **draft.model_dump(exclude_none=True))
+client.questions.generate(study.id, n_questions=8)
+```
 
-**Customer Development** (`study_type="customer_development"`):
-- `problem_hypothesis` (required) — The problem hypothesis
-- `customer_segment` (required) — Target customer segment
-- `solution_concept` — Proposed solution
-- `key_assumptions` — Assumptions to validate
-- `success_criteria` — How to measure success
+**Publication.** A study's `status` is `draft`, `open`, `paused` or `closed`; only an open study admits participants, and an open study's interview configuration is locked. `publish()` checks the plan's open-study limit, credits and a validation of everything participants will read. Ethical and blocking issues must be fixed; methodological issues can be acknowledged. A refused publish raises `ConflictError`, with the details in `e.body`.
 
-**Polling** (`study_type="polling"`):
-- `research_question` (required) — The research question
-- `population_segment` — Target population
-- `geographic_scope` — Geographic boundaries
-- `survey_context` — Context for the survey
-- `data_quality_requirements` — Quality standards
+```python
+run = client.studies.validate(study.id)
+for issue in run.issues:
+    print(issue.severity, issue.code, issue.message)
+
+if run.outcome in ("passed", "methodological_issues"):
+    client.studies.publish(study.id, acknowledge_validation_run_id=run.run_id)
+
+client.studies.pause(study.id)   # stop admitting participants and unlock editing
+client.studies.publish(study.id) # reopen
+```
+
+### `client.welcome`
+
+| Method | Endpoint |
+|--------|----------|
+| `get(study_id)` | `GET /studies/{id}/welcome` |
+| `set(study_id, message=, consent=)` | `PUT /studies/{id}/welcome` |
+| `generate(study_id)` | `POST /studies/{id}/welcome/generate` |
+| `list_translations(study_id)` | `GET /studies/{id}/welcome/translations` |
+| `upsert_translation(study_id, target_language=, translation_text=)` | `PUT /studies/{id}/welcome/translations` |
+| `delete_translation(study_id, translation_id)` | `DELETE /studies/{id}/welcome/translations/{tid}` |
+
+### `client.screening` and `client.characteristics`
+
+Both have the same shape: screening gates participation with qualifying questions, and characteristics collect participant attributes for segmentation.
+
+| Method | Endpoint |
+|--------|----------|
+| `get(study_id)` | `GET /studies/{id}/screening` |
+| `set_settings(study_id, enabled=, ...)` | `PUT /studies/{id}/screening/settings` |
+| `create_question(study_id, ...)` | `POST /studies/{id}/screening/questions` |
+| `update_question(study_id, question_id, ...)` | `PATCH /studies/{id}/screening/questions/{qid}` |
+| `delete_question(study_id, question_id)` | `DELETE /studies/{id}/screening/questions/{qid}` |
+| `reorder_questions(study_id, question_ids=)` | `PUT /studies/{id}/screening/questions/order` |
+
+```python
+client.screening.create_question(
+    study.id,
+    question="Do you use the product at work?",
+    options=["Yes", "No"],
+    acceptable_options=["Yes"],
+)
+client.screening.set_settings(study.id, enabled=True, disqualification_message="Thanks anyway!")
+
+client.characteristics.create_question(study.id, question="What is your role?", variable="role",
+                                       options=["Engineer", "PM", "Designer"])
+client.characteristics.set_settings(study.id, enabled=True)
+```
 
 ### `client.questions`
 
-| Method | Description |
-|--------|-------------|
-| `generate(study_id=, number_of_questions=)` | Generate interview questions for a study |
-| `get(question_id)` | Get a question's properties |
-| `update(question_id, ...)` | Update question text, scale, options, etc. |
+The linear interview question list.
+
+| Method | Endpoint |
+|--------|----------|
+| `list(study_id)` | `GET /studies/{id}/questions` |
+| `create(study_id, question=, qtype=, ...)` | `POST /studies/{id}/questions` |
+| `generate(study_id, n_questions=, additional_instructions=)` | `POST /studies/{id}/questions/generate` |
+| `update(study_id, question_id, ...)` | `PATCH /studies/{id}/questions/{qid}` |
+| `delete(study_id, question_id)` | `DELETE /studies/{id}/questions/{qid}` |
+| `reorder(study_id, question_ids=)` | `PUT /studies/{id}/questions/order` |
+| `validate(study_id)` | `POST /studies/{id}/questions/validate` |
+
+If `qtype` is omitted it is inferred: `scale` → scale, `options` → choices, `slots` → slots, `expected_image` → image_upload, otherwise text.
+
+### `client.graph`
+
+The branching alternative to the linear list: an interview flow of steps, conditional paths, captured answers, data fetches and signals.
+
+| Method | Endpoint |
+|--------|----------|
+| `get(study_id)` | `GET /studies/{id}/graph` |
+| `set(study_id, flow=, expected_graph_version=)` | `PUT /studies/{id}/graph` |
+| `patch(study_id, ops=, expected_graph_version=)` | `PATCH /studies/{id}/graph` |
+| `check(study_id, flow=)` | `POST /studies/{id}/graph/check` |
+| `get_signals(study_id)` | `GET /studies/{id}/graph/signals` |
+| `import_questions(study_id)` | `POST /studies/{id}/graph/import-questions` |
+| `activate(study_id)` / `deactivate(study_id)` | `POST /studies/{id}/graph/activate` / `deactivate` |
+| `describe_node_types()` | `GET /graph/node-types` |
+
+Flows and patch operations can be plain dicts in the API's JSON shape, or the typed `FlowDocument`, `FlowNode`, `FlowEdge` and `PatchOp` models. `from` and `class` are Python keywords, so on the models they are `from_` and `class_`:
 
 ```python
-# Generate questions with custom instructions
-questions = client.questions.generate(
-    study_id=study.study_id,
-    number_of_questions=10,
-    additional_instructions="Focus on emotional aspects of the experience",
-)
+from deutero import FlowDocument, FlowEdge, FlowNode, PatchOp
 
-# Update a question
-client.questions.update(
-    question_id,
-    question="How would you describe your first experience?",
-    min_turns=3,
-    max_turns=5,
+# Start from the existing question list, then add a branch
+client.graph.import_questions(study.id)
+graph = client.graph.get(study.id)
+
+result = client.graph.patch(
+    study.id,
+    expected_graph_version=graph.graph_version,
+    ops=[
+        PatchOp(op="update_node", id="q1", config={"text": "Walk me through your first week."}),
+    ],
 )
+if result.valid:
+    client.graph.activate(study.id)
+else:
+    for error in result.errors:
+        print(error.node_id, error.code, error.message)
 ```
 
-### `client.personas`
+`set` and `patch` save nothing unless the resulting flow is valid; invalid flows raise `ValidationError` (with the problems in `e.body`), and a stale `expected_graph_version` raises `ConflictError`.
 
-| Method | Description |
-|--------|-------------|
-| `generate(study_id=, number_of_personas=)` | Generate synthetic interviewee personas |
+### `client.recruitment`
+
+| Method | Endpoint |
+|--------|----------|
+| `get(study_id)` | `GET /studies/{id}/recruitment` |
+| `update(study_id, short_url_slug=, max_responses=, clear_max_responses=, redirect_url=)` | `PUT /studies/{id}/recruitment` |
+
+Append `&source=<tag>` and/or `&participant_id=<your id>` to participation links; they come back on interviews as `web_source` and `external_participant_id`.
+
+### `client.embed`
+
+| Method | Endpoint |
+|--------|----------|
+| `list_keys()` | `GET /embed/keys` |
+| `create_key(allowed_origins=, study_id=, metadata_max_bytes=)` | `POST /embed/keys` |
+| `update_key(key_id, allowed_origins=, status=, metadata_max_bytes=)` | `PATCH /embed/keys/{id}` |
+| `get_snippet(study_id, publishable_key=, mode=)` | `GET /studies/{id}/embed/snippet` |
+
+`create_key` returns the `publishable_key` and `signing_secret` **once only**, so store them immediately.
+
+### `client.personas` and `client.simulations`
+
+| Method | Endpoint |
+|--------|----------|
+| `personas.list(study_id)` | `GET /studies/{id}/personas` |
+| `personas.create(study_id, content=)` | `POST /studies/{id}/personas` |
+| `personas.update(study_id, persona_id, content=)` | `PATCH /studies/{id}/personas/{pid}` |
+| `personas.delete(study_id, persona_id)` | `DELETE /studies/{id}/personas/{pid}` |
+| `personas.generate(study_id, count=, save=)` | `POST /studies/{id}/personas/generate` |
+| `simulations.run(study_id, persona_id=, persona=, model_tier=, deliver_signals=)` | `POST /studies/{id}/simulations` |
+| `simulations.list(study_id, status=, limit=, offset=)` | `GET /studies/{id}/simulations` |
+| `simulations.get(simulation_id)` | `GET /simulations/{id}` |
+| `simulations.delete(simulation_id)` | `DELETE /simulations/{id}` |
+
+Simulations run in the background. Poll until they finish:
 
 ```python
-personas = client.personas.generate(
-    study_id=study.study_id,
-    number_of_personas=5,
-    additional_instructions="Include diverse professional backgrounds",
-)
-for p in personas.personas:
-    print(f"{p.persona_id}: {p.persona[:80]}...")
+import time
+
+run = client.simulations.run(study.id, persona="A sceptical ICU nurse, short on time.")
+while (sim := client.simulations.get(run.id)).status == "running":
+    time.sleep(10)
+print(sim.status, sim.credits_used, sim.error)
 ```
 
 ### `client.interviews`
 
-| Method | Description |
-|--------|-------------|
-| `simulate(study_id=, persona_id=)` | Run a simulated interview (background task) |
+| Method | Endpoint |
+|--------|----------|
+| `list(study_id, completed=, simulated=, test_runs=, external_participant_id=, started_after=, started_before=, limit=, offset=)` | `GET /studies/{id}/interviews` |
+| `find_by_external_id(study_id, external_participant_id=, include_simulated=, include_test_runs=)` | `GET /studies/{id}/interviews/by-external-id` |
+| `get(interview_id)` | `GET /interviews/{id}` |
+| `get_transcript(interview_id)` | `GET /interviews/{id}/transcript` |
+| `get_fetches_and_signals(interview_id)` | `GET /interviews/{id}/fetches-and-signals` |
+
+Test runs — your own interviews through the dashboard's Try Interview / Preview — are left out of interview lists, transcripts and search unless you ask for them (`test_runs=True` / `include_test_runs=True`), and are flagged with `test_run` on each result.
+
+### `client.transcripts`
+
+| Method | Endpoint |
+|--------|----------|
+| `list(study_id, completed=, include_simulated=, include_test_runs=, external_participant_id=, limit=, offset=)` | `GET /studies/{id}/transcripts` |
+| `search(study_id, q=, mode=, question_id=, ...)` | `GET /studies/{id}/search` |
 
 ```python
-sim = client.interviews.simulate(
-    study_id=study.study_id,
-    persona_id=personas.personas[0].persona_id,
-)
-print(f"Credits used: {sim.credits_used}")
-print(f"Credits remaining: {sim.credits_remaining}")
-print(f"Transcript: {sim.transcript_url}")
+hits = client.transcripts.search(study.id, q="pricing is confusing", mode="semantic")
+for hit in hits.hits:
+    print(f"{hit.score:.2f}  {hit.participant_name}: {hit.content}")
 ```
 
 ### `client.analysis`
 
-| Method | Description |
-|--------|-------------|
-| `run(study_id=, model_tier=)` | Run phases 1–4 on all completed interviews |
-| `run(interview_id=, model_tier=)` | Run phases 1–4 on a single interview |
-| `run(study_id=, cross_case_analysis=True)` | Run cross-case analysis (phase 5) |
-| `get_status(study_id=)` | Get analysis progress for all interviews |
-| `get_status(interview_id=)` | Get analysis progress for one interview |
-| `get_interview_results(interview_id=, phase=)` | Get XML output for a phase |
-| `get_survey_results(study_id=)` | Get cross-case analysis XML |
-
-#### Analysis phases
-
-| Phase | Name | Description |
-|-------|------|-------------|
-| 1 | `initial_engagement` | Initial reading and engagement with the transcript |
-| 2 | `initial_noting` | Exploratory comments and initial notes |
-| 3 | `emergent_themes` | Identification of emergent themes |
-| 4 | `connections` | Connections across themes |
-| 5 | Cross-case | Synthesis across all interviews (requires ≥3 completed) |
+| Method | Endpoint |
+|--------|----------|
+| `list_questions(study_id, category=)` | `GET /studies/{id}/analysis/questions` |
+| `get_scale_responses(study_id, question_id=)` | `GET /studies/{id}/analysis/responses/scale` |
+| `get_options_responses(study_id, question_id=)` | `GET /studies/{id}/analysis/responses/options` |
+| `cluster(study_id, question_id=, n_clusters=)` | `POST /studies/{id}/analysis/cluster` |
+| `get_optimal_clusters(study_id, question_id=)` | `POST /studies/{id}/analysis/optimal-clusters` |
+| `get_latest_clustering(study_id)` | `GET /studies/{id}/analysis/clustering/latest` |
 
 ```python
-# Run analysis on all completed interviews
-result = client.analysis.run(
-    study_id=study.study_id,
-    model_tier="premium",
-)
+text_questions = client.analysis.list_questions(study.id, category="text")
+question_id = text_questions.questions[0].id
 
-# Poll for completion
-import time
-while True:
-    status = client.analysis.get_status(study_id=study.study_id)
-    done = all(i.status == "completed" for i in status.interviews)
-    if done:
-        break
-    time.sleep(30)
-
-# Get results
-for interview in status.interviews:
-    themes = client.analysis.get_interview_results(
-        interview_id=interview.interview_id,
-        phase="emergent_themes",
-    )
-    print(themes.xml_output)
-
-# Cross-case analysis
-cross = client.analysis.run(
-    study_id=study.study_id,
-    model_tier="premium",
-    cross_case_analysis=True,
-)
-print(cross.cross_case_xml)
+k = client.analysis.get_optimal_clusters(study.id, question_id=question_id).optimal_k
+result = client.analysis.cluster(study.id, question_id=question_id, n_clusters=k)
+for cluster in result.data_points:
+    print(cluster.name, len(cluster.text))
 ```
 
-### `client.credits`
+### `client.webhooks`
 
-| Method | Description |
-|--------|-------------|
-| `get_balance()` | Get current credit balance and reservations |
-| `estimate_simulation(survey_id=, ...)` | Estimate credits for simulated interviews |
-| `estimate_analysis(survey_id=, ...)` | Estimate credits for thematic analysis |
-| `estimate_survey(survey_id=, ...)` | Estimate credits for full survey + analysis |
+Organization-level event subscriptions.
+
+| Method | Endpoint |
+|--------|----------|
+| `list_event_types()` | `GET /webhooks/event-types` |
+| `list()` | `GET /webhooks` |
+| `create(label=, url=, events=, enabled=)` | `POST /webhooks` |
+| `update(webhook_id, ...)` | `PATCH /webhooks/{id}` |
+| `delete(webhook_id)` | `DELETE /webhooks/{id}` |
+| `rotate_secret(webhook_id)` | `POST /webhooks/{id}/rotate-secret` |
+| `list_deliveries(webhook_id, event_type=, success=, ...)` | `GET /webhooks/{id}/deliveries` |
+
+`create` and `rotate_secret` are the only calls that return the signing secret.
+
+## Receiving webhooks
+
+`deutero.webhooks` verifies and parses what Deutero POSTs to you. It needs no API key, so it works in a receiver that never calls the API. Deliveries are signed with [Standard Webhooks](https://www.standardwebhooks.com). The same function handles organization events (secret from `client.webhooks.create`) and interview-flow "Send a signal" steps (per-step secret from `client.graph.get_signals`).
 
 ```python
-balance = client.credits.get_balance()
-print(f"Available: {balance.net_available} credits")
+from flask import Flask, request
 
-estimate = client.credits.estimate_simulation(
-    survey_id=study.study_id,
-    model_tier="premium",
-    num_participants=10,
-    include_analysis=True,
-)
-print(f"Estimated cost: {estimate.estimated_credits} credits")
-print(f"  Per interview: {estimate.credits_per_interview}")
-print(f"  Analysis: {estimate.credits_for_analysis}")
+from deutero import webhooks
+from deutero.webhooks import InterviewCompletedEvent, StudyFullEvent
+
+app = Flask(__name__)
+
+@app.post("/deutero")
+def receive():
+    try:
+        # Pass the raw body bytes. Re-serialized JSON will not verify.
+        event = webhooks.unwrap(request.get_data(), request.headers, secret=SIGNING_SECRET)
+    except webhooks.WebhookVerificationError:
+        return "", 400
+
+    if already_processed(event.webhook_id):  # dedupe on the webhook-id header
+        return "", 204
+
+    if isinstance(event, InterviewCompletedEvent) and event.data.completed:
+        reward(event.data.external_participant_id)
+    elif isinstance(event, StudyFullEvent):
+        close_campaign(event.data.survey_id)
+    return "", 204
 ```
 
-### Model tiers
+| Event `type` | Model | `data` fields |
+|---|---|---|
+| `interview.started` | `InterviewStartedEvent` | `interview_id`, `survey_id`, `participant_id`, `external_participant_id`, `web_source` |
+| `interview.completed` | `InterviewCompletedEvent` | the above plus `completed` |
+| `analysis.completed` | `AnalysisCompletedEvent` | `interview_id`, `survey_id` |
+| `simulation.completed` | `SimulationCompletedEvent` | `interview_id`, `survey_id` |
+| `study.created` | `StudyCreatedEvent` | `study_id`, `survey_id`, `name`, `project_id`, `created_via` |
+| `credits.exhausted` | `CreditsExhaustedEvent` | `organization_id` |
+| `study.full` | `StudyFullEvent` | `survey_id`, `survey_name` |
 
-| Tier | Description |
-|------|-------------|
-| `open_weights` | Cost-effective open-weights model (default) |
-| `premium` | Balanced performance with Claude Haiku |
-| `frontier` | Best quality with Claude Sonnet |
+`survey_id` is the study ID under its older name. Flow signals and any event type the SDK doesn't know yet come back as a plain `WebhookEvent`, with `data` as a dict. `event.simulated` is `True` for signals sent from a simulated interview. `external_participant_id` and `web_source` come from the participant's link and are not authenticated. The signature proves the event came from Deutero, not who the participant is.
 
-```python
-# Check current tier
-info = client.studies.get_model_tier(study.study_id)
-print(f"Current: {info.model_tier} ({info.model_id})")
+Other helpers:
 
-# Upgrade
-client.studies.set_model_tier(study.study_id, model_tier="frontier")
-```
+- `webhooks.verify(body, headers, secret=)` checks the signature only.
+- `webhooks.parse_event(body, headers)` parses without verifying (tests only).
+- `webhooks.sign(body, secret=, msg_id=)` builds valid headers so you can exercise your receiver locally.
+
+Deliveries older or newer than 5 minutes are rejected. Change this with `tolerance=` (in seconds), or pass `tolerance=None` to replay stored deliveries.
+
+### `client.credits` and `client.health()`
+
+| Method | Endpoint |
+|--------|----------|
+| `credits.get_balance()` | `GET /credits/balance` |
+| `health()` | `GET /health` |
 
 ## Error handling
 
@@ -315,22 +429,26 @@ The SDK raises specific exceptions for different error types:
 ```python
 from deutero import (
     Deutero,
-    AuthenticationError,
-    NotFoundError,
-    InsufficientCreditsError,
-    ValidationError,
-    RateLimitError,
     APIError,
+    AuthenticationError,
+    ConflictError,
+    InsufficientCreditsError,
+    NotFoundError,
+    PermissionDeniedError,
+    RateLimitError,
+    ValidationError,
 )
 
 client = Deutero(api_key="your-key")
 
 try:
-    study = client.studies.get_participation("nonexistent-id")
+    client.simulations.run(study_id, persona_id=persona_id, model_tier="premium")
+except PermissionDeniedError as e:
+    print(f"Not available on your plan: {e.message}")
 except AuthenticationError:
     print("Invalid API key")
 except NotFoundError:
-    print("Study not found")
+    print("Study or persona not found")
 except InsufficientCreditsError as e:
     print(f"Not enough credits: {e.message}")
 except ValidationError as e:
@@ -346,25 +464,30 @@ except APIError as e:
 ```
 DeuteroError
 ├── APIError
-│   ├── AuthenticationError    (401, 403)
-│   ├── NotFoundError          (404)
-│   ├── ValidationError        (400, 422)
+│   ├── AuthenticationError      (401)
+│   │   └── PermissionDeniedError (403)
+│   ├── NotFoundError            (404)
+│   ├── ConflictError            (409)
+│   ├── ValidationError          (400, 422)
 │   ├── InsufficientCreditsError (402)
-│   ├── RateLimitError         (429)
-│   ├── BadGatewayError        (502)
-│   └── InternalServerError    (5xx)
+│   ├── RateLimitError           (429)
+│   ├── BadGatewayError          (502)
+│   └── InternalServerError      (5xx)
 ├── ConnectionError
-└── TimeoutError
+├── TimeoutError
+└── WebhookVerificationError
 ```
 
 ## Configuration
 
 ### Custom base URL
 
+The default is `https://dashboard.deutero.ai/study-api`.
+
 ```python
 client = Deutero(
     api_key="your-key",
-    base_url="https://custom.deutero.ai",
+    base_url="https://staging.example.com/study-api",
 )
 ```
 
@@ -379,13 +502,13 @@ client = Deutero(
 
 ### Custom HTTP client
 
-Bring your own `httpx.Client` for proxies, retries, or other transport customization:
+Bring your own `httpx.Client` for proxies, retries, or other transport customization. The SDK still adds its base URL (if your client has none) and the API key header:
 
 ```python
 import httpx
 
 http_client = httpx.Client(
-    proxies="http://proxy.example.com:8080",
+    proxy="http://proxy.example.com:8080",
     verify="/path/to/cert.pem",
 )
 
@@ -404,94 +527,18 @@ with Deutero(api_key="your-key") as client:
 # Connection pool is automatically closed
 ```
 
-## Complete workflow example
-
-```python
-"""End-to-end: generate a study, simulate interviews, and analyze results."""
-
-from deutero import Deutero
-
-client = Deutero()
-
-# Step 1: Create the study
-study = client.studies.generate(
-    study_type="customer_development",
-    problem_hypothesis="Small business owners struggle to track expenses across multiple accounts",
-    customer_segment="Small business owners with 1-10 employees",
-    solution_concept="An AI-powered expense aggregation tool",
-    model_tier="premium",
-)
-print(f"✓ Study created: {study.study_name}")
-
-# Step 2: Generate questions
-questions = client.questions.generate(
-    study_id=study.study_id,
-    number_of_questions=8,
-)
-print(f"✓ Generated {len(questions.question_list)} questions")
-
-# Step 3: Check cost
-estimate = client.credits.estimate_simulation(
-    survey_id=study.study_id,
-    model_tier="premium",
-    num_participants=5,
-    include_analysis=True,
-)
-print(f"✓ Estimated cost: {estimate.estimated_credits} credits")
-
-# Step 4: Generate personas and run simulations
-personas = client.personas.generate(
-    study_id=study.study_id,
-    number_of_personas=5,
-)
-
-for persona in personas.personas:
-    sim = client.interviews.simulate(
-        study_id=study.study_id,
-        persona_id=persona.persona_id,
-    )
-    print(f"  ✓ Simulated: {sim.transcript_url}")
-
-# Step 5: Run analysis
-result = client.analysis.run(
-    study_id=study.study_id,
-    model_tier="premium",
-)
-print(f"✓ Analysis queued for {result.interviews_queued} interviews")
-
-# Step 6: Wait and retrieve results
-import time
-
-while True:
-    status = client.analysis.get_status(study_id=study.study_id)
-    completed = sum(1 for i in status.interviews if i.status == "completed")
-    print(f"  Progress: {completed}/{status.total_interviews} completed")
-    if completed == status.total_interviews:
-        break
-    time.sleep(30)
-
-# Step 7: Cross-case analysis
-cross_case = client.analysis.run(
-    study_id=study.study_id,
-    model_tier="premium",
-    cross_case_analysis=True,
-)
-print(f"✓ Cross-case analysis complete")
-
-# Step 8: Generate agent requirements
-requirements = client.studies.get_agent_requirements(study.study_id)
-with open(requirements.filename, "w") as f:
-    f.write(requirements.markdown)
-print(f"✓ Saved requirements to {requirements.filename}")
-```
-
 ## Development
 
 ```bash
-git clone https://github.com/deutero-ai/deutero-python.git
-cd deutero-python
-pip install -e ".[dev]"
+uv venv && uv pip install -e ".[dev]"
 pytest
+```
+
+`tests/fixtures/openapi.json` is a copy of the API spec. `tests/test_resources.py` checks that every endpoint in it is reachable through the SDK and that its response parses into the matching model, so refresh that file when the API changes:
+
+```bash
+curl -s https://dashboard.deutero.ai/study-api/api/v1/openapi.json | python -m json.tool --indent 1 > tests/fixtures/openapi.json
+pytest tests/test_resources.py
 ```
 
 ## License

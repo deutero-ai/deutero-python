@@ -5,15 +5,19 @@ Provides both synchronous and asynchronous HTTP clients backed by httpx.
 
 from __future__ import annotations
 
+import enum
+from datetime import datetime
 from typing import Any, Dict, Optional
+from uuid import UUID
 
 import httpx
+from pydantic import BaseModel
 
 from deutero.exceptions import ConnectionError, TimeoutError, raise_for_status
 
 _DEFAULT_TIMEOUT = 120.0
-_DEFAULT_BASE_URL = "https://app.deutero.ai"
-_USER_AGENT = "deutero-python/0.1.0"
+_DEFAULT_BASE_URL = "https://dashboard.deutero.ai/study-api"
+_USER_AGENT = "deutero-python/0.2.0"
 
 
 def _build_headers(api_key: str, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
@@ -29,6 +33,9 @@ def _build_headers(api_key: str, extra: Optional[Dict[str, str]] = None) -> Dict
 
 def _parse_response(response: httpx.Response) -> Any:
     request_id = response.headers.get("x-request-id")
+    if response.status_code == 204 or not response.content:
+        raise_for_status(response.status_code, None, request_id=request_id)
+        return None
     try:
         body = response.json()
     except Exception:
@@ -52,10 +59,11 @@ class SyncHTTPClient:
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+        self._headers = _build_headers(api_key)
         self._owns_client = http_client is None
         self._client = http_client or httpx.Client(
             base_url=self._base_url,
-            headers=_build_headers(api_key),
+            headers=self._headers,
             timeout=timeout,
         )
 
@@ -70,9 +78,10 @@ class SyncHTTPClient:
         try:
             response = self._client.request(
                 method,
-                path,
+                self._url(path),
                 json=json,
                 params=_clean_params(params),
+                headers=self._headers,
             )
         except httpx.ConnectError as exc:
             raise ConnectionError(f"Failed to connect to {self._base_url}: {exc}") from exc
@@ -80,6 +89,10 @@ class SyncHTTPClient:
             raise TimeoutError(f"Request to {path} timed out after {self._timeout}s") from exc
 
         return _parse_response(response)
+
+    def _url(self, path: str) -> str:
+        # A caller-supplied httpx client may not carry our base URL.
+        return path if str(self._client.base_url) else self._base_url + path
 
     def get(self, path: str, *, params: Optional[Dict[str, Any]] = None) -> Any:
         return self.request("GET", path, params=params)
@@ -89,6 +102,12 @@ class SyncHTTPClient:
 
     def put(self, path: str, *, json: Optional[Any] = None, params: Optional[Dict[str, Any]] = None) -> Any:
         return self.request("PUT", path, json=json, params=params)
+
+    def patch(self, path: str, *, json: Optional[Any] = None, params: Optional[Dict[str, Any]] = None) -> Any:
+        return self.request("PATCH", path, json=json, params=params)
+
+    def delete(self, path: str, *, params: Optional[Dict[str, Any]] = None) -> Any:
+        return self.request("DELETE", path, params=params)
 
     def close(self) -> None:
         if self._owns_client:
@@ -109,10 +128,11 @@ class AsyncHTTPClient:
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+        self._headers = _build_headers(api_key)
         self._owns_client = http_client is None
         self._client = http_client or httpx.AsyncClient(
             base_url=self._base_url,
-            headers=_build_headers(api_key),
+            headers=self._headers,
             timeout=timeout,
         )
 
@@ -127,9 +147,10 @@ class AsyncHTTPClient:
         try:
             response = await self._client.request(
                 method,
-                path,
+                self._url(path),
                 json=json,
                 params=_clean_params(params),
+                headers=self._headers,
             )
         except httpx.ConnectError as exc:
             raise ConnectionError(f"Failed to connect to {self._base_url}: {exc}") from exc
@@ -137,6 +158,10 @@ class AsyncHTTPClient:
             raise TimeoutError(f"Request to {path} timed out after {self._timeout}s") from exc
 
         return _parse_response(response)
+
+    def _url(self, path: str) -> str:
+        # A caller-supplied httpx client may not carry our base URL.
+        return path if str(self._client.base_url) else self._base_url + path
 
     async def get(self, path: str, *, params: Optional[Dict[str, Any]] = None) -> Any:
         return await self.request("GET", path, params=params)
@@ -147,13 +172,46 @@ class AsyncHTTPClient:
     async def put(self, path: str, *, json: Optional[Any] = None, params: Optional[Dict[str, Any]] = None) -> Any:
         return await self.request("PUT", path, json=json, params=params)
 
+    async def patch(self, path: str, *, json: Optional[Any] = None, params: Optional[Dict[str, Any]] = None) -> Any:
+        return await self.request("PATCH", path, json=json, params=params)
+
+    async def delete(self, path: str, *, params: Optional[Dict[str, Any]] = None) -> Any:
+        return await self.request("DELETE", path, params=params)
+
     async def close(self) -> None:
         if self._owns_client:
             await self._client.aclose()
 
 
 def _clean_params(params: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """Remove None values from query parameters."""
+    """Remove None values from query parameters and stringify the rest."""
     if params is None:
         return None
-    return {k: str(v) if not isinstance(v, str) else v for k, v in params.items() if v is not None}
+    return {k: _param_value(v) for k, v in params.items() if v is not None}
+
+
+def _param_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, enum.Enum):
+        return str(value.value)
+    return value if isinstance(value, str) else str(value)
+
+
+def compact(**fields: Any) -> Dict[str, Any]:
+    """Build a JSON body from keyword arguments, dropping those left as ``None``."""
+    return {k: _jsonable(v) for k, v in fields.items() if v is not None}
+
+
+def _jsonable(value: Any) -> Any:
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json", by_alias=True, exclude_none=True)
+    if isinstance(value, UUID):
+        return str(value)
+    if isinstance(value, enum.Enum):
+        return value.value
+    if isinstance(value, list):
+        return [_jsonable(v) for v in value]
+    return value

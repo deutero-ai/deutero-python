@@ -1,179 +1,310 @@
-"""Questions resource."""
+"""Interview questions resource."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Union
 from uuid import UUID
 
+from deutero._http import compact
 from deutero.models import (
-    Question,
-    QuestionGenerateResponse,
+    GeneratedQuestionsOut,
+    QuestionListOut,
+    QuestionOut,
+    ScaleConfig,
+    SuccessResponse,
+    ValidationOut,
 )
 
 if TYPE_CHECKING:
     from deutero._http import AsyncHTTPClient, SyncHTTPClient
 
-_SENTINEL = object()
-
-
-def _build_question_update_payload(**kwargs: Any) -> Dict[str, Any]:
-    """Build a payload dict containing only explicitly provided (non-sentinel) values."""
-    return {k: v for k, v in kwargs.items() if v is not None}
-
 
 class Questions:
-    """Synchronous interface for question operations."""
+    """Synchronous interface for a study's linear interview question list."""
 
     def __init__(self, client: SyncHTTPClient) -> None:
         self._client = client
 
-    def generate(
+    def list(self, study_id: Union[str, UUID]) -> QuestionListOut:
+        """List the study's main questions, in interview order."""
+        data = self._client.get(f"/api/v1/studies/{study_id}/questions")
+        return QuestionListOut.model_validate(data)
+
+    def create(
         self,
-        *,
         study_id: Union[str, UUID],
-        number_of_questions: int,
-        additional_instructions: Optional[str] = None,
-    ) -> QuestionGenerateResponse:
-        """Generate interview questions for a study.
-
-        Args:
-            study_id: UUID of the study to generate questions for.
-            number_of_questions: Number of questions to generate (1–25).
-            additional_instructions: Optional extra instructions for the AI.
-
-        Returns:
-            Generated questions with edit and interview URLs.
-        """
-        payload: Dict[str, Any] = {
-            "survey_id": str(study_id),
-            "number_of_questions": number_of_questions,
-        }
-        if additional_instructions is not None:
-            payload["additional_instructions"] = additional_instructions
-
-        data = self._client.post("/api/v1/questions/generate", json=payload)
-        return QuestionGenerateResponse.model_validate(data)
-
-    def get(self, question_id: Union[str, UUID]) -> Question:
-        """Get properties of a question by ID.
-
-        Args:
-            question_id: UUID of the question.
-
-        Returns:
-            The question with all its properties.
-        """
-        data = self._client.get(f"/api/v1/questions/{question_id}")
-        return Question.model_validate(data)
-
-    def update(
-        self,
-        question_id: Union[str, UUID],
         *,
-        question: Optional[str] = None,
+        question: str,
+        qtype: Optional[str] = None,
         explanation: Optional[str] = None,
-        scale: Optional[Dict[str, Any]] = None,
+        scale: Union[ScaleConfig, Dict[str, Any], None] = None,
         options: Optional[List[str]] = None,
         slots: Optional[List[str]] = None,
+        groups: Optional[List[str]] = None,
+        min_select: Optional[int] = None,
+        max_select: Optional[int] = None,
         follow_up: Optional[bool] = None,
         min_turns: Optional[int] = None,
         max_turns: Optional[int] = None,
         expected_image: Optional[str] = None,
-    ) -> Question:
-        """Update one or more properties of a question.
+    ) -> QuestionOut:
+        """Create a question and append it to the end of the study's question list.
 
-        Only the fields provided will be updated; others remain unchanged.
+        If ``qtype`` is omitted the type is inferred from the config you pass: ``scale`` →
+        scale, ``options`` → choices, ``slots`` → slots, ``expected_image`` → image_upload,
+        otherwise text.
 
         Args:
-            question_id: UUID of the question to update.
-            question: New question text.
-            explanation: Interviewer guidance/explanation.
-            scale: Scale configuration dict (minScale, maxScale, minLabel, maxLabel).
-            options: Fixed choice options list.
-            slots: Slot names list.
-            follow_up: Whether follow-up is enabled.
+            study_id: The study.
+            question: Question text.
+            qtype: Explicit question type, e.g. ``"text"``, ``"scale"``, ``"choices"``,
+                ``"multi_select"``, ``"ranking"``, ``"slots"``, ``"card_sort"`` or
+                ``"image_upload"``. ``image_upload`` needs the standard or premium model tier.
+            explanation: Interviewer guidance for probing this question.
+            scale: Scale config (scale questions), e.g.
+                ``{"minScale": 1, "maxScale": 5, "minLabel": "Not at all", "maxLabel": "Very"}``.
+            options: Answer options (choices / multi_select / ranking questions).
+            slots: Named slots to fill (slots questions).
+            groups: Bucket names (card_sort questions).
+            min_select: Minimum selections (multi_select).
+            max_select: Maximum selections (multi_select).
+            follow_up: Whether the interviewer asks follow-ups (server default ``True``).
             min_turns: Minimum conversation turns.
             max_turns: Maximum conversation turns.
-            expected_image: Expected image description.
-
-        Returns:
-            The updated question.
+            expected_image: Description of the expected upload (image_upload questions).
         """
-        payload = _build_question_update_payload(
+        payload = compact(
             question=question,
+            qtype=qtype,
             explanation=explanation,
             scale=scale,
             options=options,
             slots=slots,
+            groups=groups,
+            min_select=min_select,
+            max_select=max_select,
             follow_up=follow_up,
             min_turns=min_turns,
             max_turns=max_turns,
             expected_image=expected_image,
         )
-        data = self._client.put(
-            f"/api/v1/questions/{question_id}",
-            json=payload,
+        data = self._client.post(f"/api/v1/studies/{study_id}/questions", json=payload)
+        return QuestionOut.model_validate(data)
+
+    def generate(
+        self,
+        study_id: Union[str, UUID],
+        *,
+        n_questions: Optional[int] = None,
+        additional_instructions: Optional[str] = None,
+    ) -> GeneratedQuestionsOut:
+        """Write interview questions with AI and append them to the study's question list.
+
+        The generator works from the study's research question, objectives, methodology and
+        target population, and picks a mix of question types in the study's language. New
+        questions extend any existing list rather than repeating it; nothing is replaced.
+        A model call that typically takes 30 seconds to two minutes.
+
+        Args:
+            study_id: The study.
+            n_questions: How many questions to generate, 3-20 (server default 10).
+            additional_instructions: Extra guidance, e.g. ``"start with two warm-up questions"``.
+        """
+        data = self._client.post(
+            f"/api/v1/studies/{study_id}/questions/generate",
+            json=compact(n_questions=n_questions, additional_instructions=additional_instructions),
         )
-        return Question.model_validate(data)
+        return GeneratedQuestionsOut.model_validate(data)
+
+    def update(
+        self,
+        study_id: Union[str, UUID],
+        question_id: Union[str, UUID],
+        *,
+        question: Optional[str] = None,
+        qtype: Optional[str] = None,
+        explanation: Optional[str] = None,
+        scale: Union[ScaleConfig, Dict[str, Any], None] = None,
+        options: Optional[List[str]] = None,
+        slots: Optional[List[str]] = None,
+        groups: Optional[List[str]] = None,
+        min_select: Optional[int] = None,
+        max_select: Optional[int] = None,
+        follow_up: Optional[bool] = None,
+        min_turns: Optional[int] = None,
+        max_turns: Optional[int] = None,
+        expected_image: Optional[str] = None,
+    ) -> QuestionOut:
+        """Partially update a question. Only the arguments you pass are changed.
+
+        Pass an empty list to clear ``options``, ``slots`` or ``groups``. See :meth:`create`
+        for argument meanings.
+        """
+        payload = compact(
+            question=question,
+            qtype=qtype,
+            explanation=explanation,
+            scale=scale,
+            options=options,
+            slots=slots,
+            groups=groups,
+            min_select=min_select,
+            max_select=max_select,
+            follow_up=follow_up,
+            min_turns=min_turns,
+            max_turns=max_turns,
+            expected_image=expected_image,
+        )
+        data = self._client.patch(f"/api/v1/studies/{study_id}/questions/{question_id}", json=payload)
+        return QuestionOut.model_validate(data)
+
+    def delete(self, study_id: Union[str, UUID], question_id: Union[str, UUID]) -> SuccessResponse:
+        """Delete a question and its attached images; remaining questions are renumbered."""
+        data = self._client.delete(f"/api/v1/studies/{study_id}/questions/{question_id}")
+        return SuccessResponse.model_validate(data)
+
+    def reorder(
+        self,
+        study_id: Union[str, UUID],
+        *,
+        question_ids: Sequence[Union[str, UUID]],
+    ) -> QuestionListOut:
+        """Reorder the question list. Supply every question ID in the desired interview order."""
+        data = self._client.put(
+            f"/api/v1/studies/{study_id}/questions/order",
+            json={"question_ids": [str(q) for q in question_ids]},
+        )
+        return QuestionListOut.model_validate(data)
+
+    def validate(self, study_id: Union[str, UUID]) -> ValidationOut:
+        """Review the questions before the study goes live.
+
+        Returns an overall ethics pass/fail plus per-question language-quality and
+        redundancy findings — the same check the dashboard's **Validate** button runs.
+        """
+        data = self._client.post(f"/api/v1/studies/{study_id}/questions/validate")
+        return ValidationOut.model_validate(data)
 
 
 class AsyncQuestions:
-    """Asynchronous interface for question operations."""
+    """Asynchronous interface for a study's linear interview question list."""
 
     def __init__(self, client: AsyncHTTPClient) -> None:
         self._client = client
 
-    async def generate(
+    async def list(self, study_id: Union[str, UUID]) -> QuestionListOut:
+        """List questions. See :meth:`Questions.list`."""
+        data = await self._client.get(f"/api/v1/studies/{study_id}/questions")
+        return QuestionListOut.model_validate(data)
+
+    async def create(
         self,
-        *,
         study_id: Union[str, UUID],
-        number_of_questions: int,
-        additional_instructions: Optional[str] = None,
-    ) -> QuestionGenerateResponse:
-        """Generate interview questions for a study. See :meth:`Questions.generate`."""
-        payload: Dict[str, Any] = {
-            "survey_id": str(study_id),
-            "number_of_questions": number_of_questions,
-        }
-        if additional_instructions is not None:
-            payload["additional_instructions"] = additional_instructions
-
-        data = await self._client.post("/api/v1/questions/generate", json=payload)
-        return QuestionGenerateResponse.model_validate(data)
-
-    async def get(self, question_id: Union[str, UUID]) -> Question:
-        """Get properties of a question by ID."""
-        data = await self._client.get(f"/api/v1/questions/{question_id}")
-        return Question.model_validate(data)
-
-    async def update(
-        self,
-        question_id: Union[str, UUID],
         *,
-        question: Optional[str] = None,
+        question: str,
+        qtype: Optional[str] = None,
         explanation: Optional[str] = None,
-        scale: Optional[Dict[str, Any]] = None,
+        scale: Union[ScaleConfig, Dict[str, Any], None] = None,
         options: Optional[List[str]] = None,
         slots: Optional[List[str]] = None,
+        groups: Optional[List[str]] = None,
+        min_select: Optional[int] = None,
+        max_select: Optional[int] = None,
         follow_up: Optional[bool] = None,
         min_turns: Optional[int] = None,
         max_turns: Optional[int] = None,
         expected_image: Optional[str] = None,
-    ) -> Question:
-        """Update one or more properties of a question. See :meth:`Questions.update`."""
-        payload = _build_question_update_payload(
+    ) -> QuestionOut:
+        """Create a question. See :meth:`Questions.create`."""
+        payload = compact(
             question=question,
+            qtype=qtype,
             explanation=explanation,
             scale=scale,
             options=options,
             slots=slots,
+            groups=groups,
+            min_select=min_select,
+            max_select=max_select,
             follow_up=follow_up,
             min_turns=min_turns,
             max_turns=max_turns,
             expected_image=expected_image,
         )
-        data = await self._client.put(
-            f"/api/v1/questions/{question_id}",
-            json=payload,
+        data = await self._client.post(f"/api/v1/studies/{study_id}/questions", json=payload)
+        return QuestionOut.model_validate(data)
+
+    async def generate(
+        self,
+        study_id: Union[str, UUID],
+        *,
+        n_questions: Optional[int] = None,
+        additional_instructions: Optional[str] = None,
+    ) -> GeneratedQuestionsOut:
+        """Generate questions with AI. See :meth:`Questions.generate`."""
+        data = await self._client.post(
+            f"/api/v1/studies/{study_id}/questions/generate",
+            json=compact(n_questions=n_questions, additional_instructions=additional_instructions),
         )
-        return Question.model_validate(data)
+        return GeneratedQuestionsOut.model_validate(data)
+
+    async def update(
+        self,
+        study_id: Union[str, UUID],
+        question_id: Union[str, UUID],
+        *,
+        question: Optional[str] = None,
+        qtype: Optional[str] = None,
+        explanation: Optional[str] = None,
+        scale: Union[ScaleConfig, Dict[str, Any], None] = None,
+        options: Optional[List[str]] = None,
+        slots: Optional[List[str]] = None,
+        groups: Optional[List[str]] = None,
+        min_select: Optional[int] = None,
+        max_select: Optional[int] = None,
+        follow_up: Optional[bool] = None,
+        min_turns: Optional[int] = None,
+        max_turns: Optional[int] = None,
+        expected_image: Optional[str] = None,
+    ) -> QuestionOut:
+        """Update a question. See :meth:`Questions.update`."""
+        payload = compact(
+            question=question,
+            qtype=qtype,
+            explanation=explanation,
+            scale=scale,
+            options=options,
+            slots=slots,
+            groups=groups,
+            min_select=min_select,
+            max_select=max_select,
+            follow_up=follow_up,
+            min_turns=min_turns,
+            max_turns=max_turns,
+            expected_image=expected_image,
+        )
+        data = await self._client.patch(f"/api/v1/studies/{study_id}/questions/{question_id}", json=payload)
+        return QuestionOut.model_validate(data)
+
+    async def delete(self, study_id: Union[str, UUID], question_id: Union[str, UUID]) -> SuccessResponse:
+        """Delete a question. See :meth:`Questions.delete`."""
+        data = await self._client.delete(f"/api/v1/studies/{study_id}/questions/{question_id}")
+        return SuccessResponse.model_validate(data)
+
+    async def reorder(
+        self,
+        study_id: Union[str, UUID],
+        *,
+        question_ids: Sequence[Union[str, UUID]],
+    ) -> QuestionListOut:
+        """Reorder questions. See :meth:`Questions.reorder`."""
+        data = await self._client.put(
+            f"/api/v1/studies/{study_id}/questions/order",
+            json={"question_ids": [str(q) for q in question_ids]},
+        )
+        return QuestionListOut.model_validate(data)
+
+    async def validate(self, study_id: Union[str, UUID]) -> ValidationOut:
+        """Validate questions. See :meth:`Questions.validate`."""
+        data = await self._client.post(f"/api/v1/studies/{study_id}/questions/validate")
+        return ValidationOut.model_validate(data)

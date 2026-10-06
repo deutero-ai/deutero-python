@@ -1,15 +1,18 @@
-"""Analysis resource."""
+"""Analysis & clustering resource."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional, Union
 from uuid import UUID
 
+from deutero._http import compact
 from deutero.models import (
-    AnalysisRunResponse,
-    AnalysisStatusResponse,
-    CrossCaseAnalysisResult,
-    InterviewAnalysisResult,
+    AnalysisCategory,
+    AnalyzableQuestionsOut,
+    ClusteringOut,
+    OptimalClustersOut,
+    OptionsResponsesOut,
+    ScaleResponsesOut,
 )
 
 if TYPE_CHECKING:
@@ -17,181 +20,159 @@ if TYPE_CHECKING:
 
 
 class Analysis:
-    """Synchronous interface for thematic analysis operations."""
+    """Synchronous interface for per-question aggregations and response clustering.
+
+    ``question_id`` arguments take a question ID for linear studies, or the graph step ID
+    you authored for flow studies.
+    """
 
     def __init__(self, client: SyncHTTPClient) -> None:
         self._client = client
 
-    def run(
+    def list_questions(
         self,
+        study_id: Union[str, UUID],
         *,
-        interview_id: Optional[Union[str, UUID]] = None,
-        study_id: Optional[Union[str, UUID]] = None,
-        model_tier: str = "open_weights",
-        cross_case_analysis: bool = False,
-    ) -> AnalysisRunResponse:
-        """Run thematic analysis on interviews.
-
-        **Individual analysis (phases 1–4):**
-        Provide ``interview_id`` for a single interview, or ``study_id`` to
-        analyze all completed interviews. Runs in the background.
-
-        **Cross-case analysis (phase 5):**
-        Provide ``study_id`` and set ``cross_case_analysis=True``. Requires
-        at least 3 interviews with completed phases 1–4. Runs synchronously.
+        category: Union[str, AnalysisCategory],
+    ) -> AnalyzableQuestionsOut:
+        """List the study's questions eligible for an analysis view.
 
         Args:
-            interview_id: UUID of a specific interview.
-            study_id: UUID of a study.
-            model_tier: ``"open_weights"``, ``"premium"``, or ``"frontier"``.
-            cross_case_analysis: Whether to run cross-case analysis.
-
-        Returns:
-            Analysis job info with queued interviews and credit usage.
-        """
-        payload = {
-            "model_tier": model_tier,
-            "cross_case_analysis": cross_case_analysis,
-        }
-        if interview_id is not None:
-            payload["interview_id"] = str(interview_id)
-        if study_id is not None:
-            payload["study_id"] = str(study_id)
-
-        data = self._client.post("/api/v1/analysis/run", json=payload)
-        return AnalysisRunResponse.model_validate(data)
-
-    def get_status(
-        self,
-        *,
-        interview_id: Optional[Union[str, UUID]] = None,
-        study_id: Optional[Union[str, UUID]] = None,
-    ) -> AnalysisStatusResponse:
-        """Get analysis status for interviews.
-
-        Provide either ``interview_id`` for a single interview or ``study_id``
-        for all interviews in a study.
-
-        Args:
-            interview_id: UUID of a specific interview.
-            study_id: UUID of a study.
-
-        Returns:
-            Status and phase completion for each interview.
-        """
-        params = {}
-        if interview_id is not None:
-            params["interview_id"] = str(interview_id)
-        if study_id is not None:
-            params["survey_id"] = str(study_id)
-
-        data = self._client.get("/api/v1/analysis/status", params=params)
-        return AnalysisStatusResponse.model_validate(data)
-
-    def get_interview_results(
-        self,
-        *,
-        interview_id: Union[str, UUID],
-        phase: str,
-    ) -> InterviewAnalysisResult:
-        """Get analysis results for a specific phase of an interview.
-
-        Args:
-            interview_id: UUID of the interview.
-            phase: One of ``"initial_engagement"``, ``"initial_noting"``,
-                ``"emergent_themes"``, or ``"connections"``.
-
-        Returns:
-            The XML output for the requested phase.
+            study_id: The study.
+            category: ``"text"`` (clusterable free text), ``"scale"`` or ``"options"``.
         """
         data = self._client.get(
-            "/api/v1/analysis/results/interview",
-            params={
-                "interview_id": str(interview_id),
-                "phase": phase,
-            },
+            f"/api/v1/studies/{study_id}/analysis/questions",
+            params={"category": category},
         )
-        return InterviewAnalysisResult.model_validate(data)
+        return AnalyzableQuestionsOut.model_validate(data)
 
-    def get_survey_results(self, *, study_id: Union[str, UUID]) -> CrossCaseAnalysisResult:
-        """Get cross-case analysis results for a survey.
+    def get_scale_responses(self, study_id: Union[str, UUID], *, question_id: str) -> ScaleResponsesOut:
+        """Tally responses per scale value for a scale question."""
+        data = self._client.get(
+            f"/api/v1/studies/{study_id}/analysis/responses/scale",
+            params={"question_id": question_id},
+        )
+        return ScaleResponsesOut.model_validate(data)
+
+    def get_options_responses(self, study_id: Union[str, UUID], *, question_id: str) -> OptionsResponsesOut:
+        """Tally responses per option for a single- or multi-select question."""
+        data = self._client.get(
+            f"/api/v1/studies/{study_id}/analysis/responses/options",
+            params={"question_id": question_id},
+        )
+        return OptionsResponsesOut.model_validate(data)
+
+    def cluster(
+        self,
+        study_id: Union[str, UUID],
+        *,
+        question_id: Optional[str] = None,
+        question_number: Optional[int] = None,
+        n_clusters: Optional[int] = None,
+    ) -> ClusteringOut:
+        """Group participants' free-text answers to one question into labeled themes (k-means).
+
+        The result is saved and becomes the study's latest clustering run.
 
         Args:
-            study_id: UUID of the survey.
-
-        Returns:
-            The cross-case analysis XML output.
+            study_id: The study.
+            question_id: The question to cluster.
+            question_number: Alternative to ``question_id`` for linear studies.
+            n_clusters: Number of clusters, 2-20 (server default 3). Too few responses for
+                the requested count raises :class:`~deutero.exceptions.ValidationError`.
         """
-        data = self._client.get(
-            "/api/v1/analysis/results/survey",
-            params={"survey_id": str(study_id)},
+        data = self._client.post(
+            f"/api/v1/studies/{study_id}/analysis/cluster",
+            json=compact(question_id=question_id, question_number=question_number, n_clusters=n_clusters),
         )
-        return CrossCaseAnalysisResult.model_validate(data)
+        return ClusteringOut.model_validate(data)
+
+    def get_optimal_clusters(
+        self,
+        study_id: Union[str, UUID],
+        *,
+        question_id: Optional[str] = None,
+        question_number: Optional[int] = None,
+    ) -> OptimalClustersOut:
+        """Estimate the best cluster count for a question using the elbow method."""
+        data = self._client.post(
+            f"/api/v1/studies/{study_id}/analysis/optimal-clusters",
+            json=compact(question_id=question_id, question_number=question_number),
+        )
+        return OptimalClustersOut.model_validate(data)
+
+    def get_latest_clustering(self, study_id: Union[str, UUID]) -> ClusteringOut:
+        """Get the study's most recent saved clustering run. ``exists`` is ``False`` if there is none."""
+        data = self._client.get(f"/api/v1/studies/{study_id}/analysis/clustering/latest")
+        return ClusteringOut.model_validate(data)
 
 
 class AsyncAnalysis:
-    """Asynchronous interface for thematic analysis operations."""
+    """Asynchronous interface for per-question aggregations and response clustering."""
 
     def __init__(self, client: AsyncHTTPClient) -> None:
         self._client = client
 
-    async def run(
+    async def list_questions(
         self,
+        study_id: Union[str, UUID],
         *,
-        interview_id: Optional[Union[str, UUID]] = None,
-        study_id: Optional[Union[str, UUID]] = None,
-        model_tier: str = "open_weights",
-        cross_case_analysis: bool = False,
-    ) -> AnalysisRunResponse:
-        """Run thematic analysis on interviews. See :meth:`Analysis.run`."""
-        payload = {
-            "model_tier": model_tier,
-            "cross_case_analysis": cross_case_analysis,
-        }
-        if interview_id is not None:
-            payload["interview_id"] = str(interview_id)
-        if study_id is not None:
-            payload["study_id"] = str(study_id)
-
-        data = await self._client.post("/api/v1/analysis/run", json=payload)
-        return AnalysisRunResponse.model_validate(data)
-
-    async def get_status(
-        self,
-        *,
-        interview_id: Optional[Union[str, UUID]] = None,
-        study_id: Optional[Union[str, UUID]] = None,
-    ) -> AnalysisStatusResponse:
-        """Get analysis status. See :meth:`Analysis.get_status`."""
-        params = {}
-        if interview_id is not None:
-            params["interview_id"] = str(interview_id)
-        if study_id is not None:
-            params["survey_id"] = str(study_id)
-
-        data = await self._client.get("/api/v1/analysis/status", params=params)
-        return AnalysisStatusResponse.model_validate(data)
-
-    async def get_interview_results(
-        self,
-        *,
-        interview_id: Union[str, UUID],
-        phase: str,
-    ) -> InterviewAnalysisResult:
-        """Get interview analysis results. See :meth:`Analysis.get_interview_results`."""
+        category: Union[str, AnalysisCategory],
+    ) -> AnalyzableQuestionsOut:
+        """List analyzable questions. See :meth:`Analysis.list_questions`."""
         data = await self._client.get(
-            "/api/v1/analysis/results/interview",
-            params={
-                "interview_id": str(interview_id),
-                "phase": phase,
-            },
+            f"/api/v1/studies/{study_id}/analysis/questions",
+            params={"category": category},
         )
-        return InterviewAnalysisResult.model_validate(data)
+        return AnalyzableQuestionsOut.model_validate(data)
 
-    async def get_survey_results(self, *, study_id: Union[str, UUID]) -> CrossCaseAnalysisResult:
-        """Get cross-case analysis results. See :meth:`Analysis.get_survey_results`."""
+    async def get_scale_responses(self, study_id: Union[str, UUID], *, question_id: str) -> ScaleResponsesOut:
+        """Tally scale responses. See :meth:`Analysis.get_scale_responses`."""
         data = await self._client.get(
-            "/api/v1/analysis/results/survey",
-            params={"survey_id": str(study_id)},
+            f"/api/v1/studies/{study_id}/analysis/responses/scale",
+            params={"question_id": question_id},
         )
-        return CrossCaseAnalysisResult.model_validate(data)
+        return ScaleResponsesOut.model_validate(data)
+
+    async def get_options_responses(self, study_id: Union[str, UUID], *, question_id: str) -> OptionsResponsesOut:
+        """Tally options responses. See :meth:`Analysis.get_options_responses`."""
+        data = await self._client.get(
+            f"/api/v1/studies/{study_id}/analysis/responses/options",
+            params={"question_id": question_id},
+        )
+        return OptionsResponsesOut.model_validate(data)
+
+    async def cluster(
+        self,
+        study_id: Union[str, UUID],
+        *,
+        question_id: Optional[str] = None,
+        question_number: Optional[int] = None,
+        n_clusters: Optional[int] = None,
+    ) -> ClusteringOut:
+        """Cluster responses. See :meth:`Analysis.cluster`."""
+        data = await self._client.post(
+            f"/api/v1/studies/{study_id}/analysis/cluster",
+            json=compact(question_id=question_id, question_number=question_number, n_clusters=n_clusters),
+        )
+        return ClusteringOut.model_validate(data)
+
+    async def get_optimal_clusters(
+        self,
+        study_id: Union[str, UUID],
+        *,
+        question_id: Optional[str] = None,
+        question_number: Optional[int] = None,
+    ) -> OptimalClustersOut:
+        """Estimate the cluster count. See :meth:`Analysis.get_optimal_clusters`."""
+        data = await self._client.post(
+            f"/api/v1/studies/{study_id}/analysis/optimal-clusters",
+            json=compact(question_id=question_id, question_number=question_number),
+        )
+        return OptimalClustersOut.model_validate(data)
+
+    async def get_latest_clustering(self, study_id: Union[str, UUID]) -> ClusteringOut:
+        """Get the latest clustering run. See :meth:`Analysis.get_latest_clustering`."""
+        data = await self._client.get(f"/api/v1/studies/{study_id}/analysis/clustering/latest")
+        return ClusteringOut.model_validate(data)
