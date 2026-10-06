@@ -104,5 +104,8 @@
   },
   "contextual": {
     "options": ["copy", "view", "chatgpt", "claude"]
+  },
+  "fonts": {
+    "family": "Changa"
   }
 }
