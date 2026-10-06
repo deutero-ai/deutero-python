@@ -1,12 +1,12 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
+  "theme": "linden",
   "name": "Deutero Python SDK",
   "description": "Official Python SDK for the Deutero Study Management API: design AI-moderated interview studies, recruit participants, rehearse with AI personas and analyze responses.",
   "colors": {
-    "primary": "#4F46E5",
-    "light": "#818CF8",
-    "dark": "#4338CA"
+    "primary": "#2A12E6",
+    "light": "#809FFF",
+    "dark": "#2A12E6"
   },
   "navigation": {
     "tabs": [
@@ -89,6 +89,10 @@
       {
         "label": "Dashboard",
         "href": "https://dashboard.deutero.ai"
+      },
+      {
+        "href": "https://deutero.ai",
+        "label": "Home"
       }
     ],
     "primary": {
@@ -99,13 +103,42 @@
   "footer": {
     "socials": {
       "github": "https://github.com/deutero-ai/deutero-python",
-      "website": "https://deutero.ai"
+      "website": "https://deutero.ai",
+      "x": "https://x.com/deuteroai"
     }
   },
   "contextual": {
     "options": ["copy", "view", "chatgpt", "claude"]
   },
   "fonts": {
-    "family": "Changa"
+    "heading": {
+      "family": "Changa"
+    },
+    "body": {
+      "family": "Victor Mono"
+    }
+  },
+  "logo": {
+    "light": "/images/deutero-logo-new(1).png",
+    "dark": "/images/deutero-logo-new(1).png"
+  },
+  "favicon": {
+    "light": "/images/deutero-logo-new(1).png",
+    "dark": "/images/deutero-logo-new(1).png"
+  },
+  "icons": {
+    "library": "lucide"
+  },
+  "background": {
+    "decoration": "gradient"
+  },
+  "api": {
+    "openapi": "https://dashboard.deutero.ai/study-api/api/v1/openapi.json"
+  },
+  "integrations": {
+    "posthog": {
+      "apiKey": "phc_qda5r4S3eV1sN0kOGvhkMneozBh4rWOUeVRt3m7EDcc",
+      "sessionRecording": false
+    }
   }
 }
