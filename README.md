@@ -1,12 +1,14 @@
 # Deutero Python SDK
 
-Official Python bindings for the [Deutero](https://deutero.ai) Study Management API.
+Official Python SDK for [Deutero](https://deutero.ai), the platform for **AI moderated interviews**. Use it to automate **qualitative interviewing** and scale **user research** from Python.
 
-Run the full study lifecycle from Python: create and configure studies, gate them with screening and consent, author linear or branching interview flows, recruit and embed, rehearse with AI personas, then monitor, search and cluster the responses.
+Run the full study lifecycle in code: create and configure studies, gate them with screening and consent, author linear or branching interview flows for the AI interviewer, recruit participants and embed interviews in your product, rehearse with AI personas, then monitor, search and cluster the interview transcripts.
+
+**Documentation:** [docs.deutero.ai](https://docs.deutero.ai) · [Quickstart](https://docs.deutero.ai/get-started/quickstart) · [Changelog](https://github.com/deutero-ai/deutero-python/blob/master/CHANGELOG.md)
 
 [![PyPI version](https://img.shields.io/pypi/v/deutero.svg)](https://pypi.org/project/deutero/)
 [![Python](https://img.shields.io/pypi/pyversions/deutero.svg)](https://pypi.org/project/deutero/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/deutero-ai/deutero-python/blob/master/LICENSE)
 
 ---
 
@@ -543,4 +545,4 @@ pytest tests/test_resources.py
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/deutero-ai/deutero-python/blob/master/LICENSE).

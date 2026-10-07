@@ -5,12 +5,24 @@ build-backend = "hatchling.build"
 [project]
 name = "deutero"
 version = "0.2.0"
-description = "Python SDK for the Deutero Study Management API"
+description = "Python SDK for Deutero: run AI moderated interviews and qualitative interviewing at scale for user research, from study design and recruitment to transcript analysis."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
 authors = [{ name = "Deutero", email = "support@deutero.ai" }]
-keywords = ["deutero", "research", "interviews", "qualitative", "thematic-analysis", "sdk"]
+keywords = [
+    "deutero",
+    "ai-moderated-interviews",
+    "ai-interviewer",
+    "qualitative-interviewing",
+    "qualitative-research",
+    "user-research",
+    "ux-research",
+    "customer-interviews",
+    "interviews",
+    "thematic-analysis",
+    "sdk",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -48,10 +60,13 @@ Homepage = "https://deutero.ai"
 Documentation = "https://docs.deutero.ai"
 Repository = "https://github.com/deutero-ai/deutero-python"
 Issues = "https://github.com/deutero-ai/deutero-python/issues"
-Changelog = "https://github.com/deutero-ai/deutero-python/blob/main/CHANGELOG.md"
+Changelog = "https://github.com/deutero-ai/deutero-python/blob/master/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/deutero"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/deutero", "tests", "README.md", "CHANGELOG.md", "LICENSE"]
 
 [tool.ruff]
 target-version = "py39"
